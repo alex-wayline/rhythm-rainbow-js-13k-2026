@@ -198,13 +198,33 @@ function drawHud(t, now) {
     txt('PRESS ANY KEY', W / 2, H * 0.85, 20, '#fff', '#34104d');   // under the unicorn, above the receptors; stroke = fill, so the pulse never shows an outline
   } else if (state === 4) {
     const f = Math.min(W / 35, 22);
-    txt('SELECT A STAGE', W / 2, H * 0.14, Math.min(W / 18, 44), '#ffe9ff', '#34104d');
+    // Sparse coloured glints and a quiet meteor, behind the selection controls.
+    for (let i = 0; i < 24; i++) {
+      const x = ((i * 0.618) % 1) * W, y = ((i * 0.377 + 0.07) % 1) * H;
+      hx.globalAlpha = 0.18 + 0.12 * Math.sin(now + i);
+      hx.fillStyle = css(hsv(TRACK_H[i % 7], 0.4, 1));
+      hx.fillRect(x - 3, y, 7, 1); hx.fillRect(x, y - 3, 1, 7);
+    }
+    const meteor = now % 9;
+    if (meteor < 1.4) {
+      hx.strokeStyle = '#b5dcff'; hx.lineWidth = 2;
+      for (let i = 0; i < 16; i++) {
+        const x = W * 0.65 + meteor * W * 0.18 - i * 5, y = H * 0.03 + meteor * H * 0.1 - i * 2;
+        hx.globalAlpha = Math.sin(meteor / 1.4 * Math.PI) * (1 - i / 16) * 0.5;
+        hx.beginPath(); hx.moveTo(x, y); hx.lineTo(x - 5, y - 2); hx.stroke();
+      }
+    }
+    hx.globalAlpha = 1;
+    txt('SELECT A STAGE', W / 2, H * 0.14, Math.min(W / 13, H / 14, 68), '#ffe9ff', '#34104d');
     txt('Press Enter to play', W / 2, H * 0.19, f, '#bba9d2', '#34104d');
     const [g, y0] = stageLayout(), s = g * 0.84;
     for (let i = 0; i < TRACKS; i++) {
       const on = i < unlocked, r = s / 2, x = W / 2 + (i - 3) * g, y = y0;
       const color = css(hsv(TRACK_H[i], 0.65, 1));
-      hx.fillStyle = '#34104d'; hx.strokeStyle = color;
+      const enamel = hx.createLinearGradient(x, y - r, x, y + r);
+      enamel.addColorStop(0, css(hsv(TRACK_H[i], 0.5, i === sel ? 0.55 : 0.28)));
+      enamel.addColorStop(1, '#180d30');
+      hx.fillStyle = enamel; hx.strokeStyle = color;
       hx.lineWidth = i === sel ? 5 : 2;
       hx.shadowColor = color; hx.shadowBlur = i === sel ? 24 : 0;
       hx.beginPath(); hx.roundRect(x - r, y - r, 2 * r, 2 * r, r * 0.3); hx.fill(); hx.stroke();
@@ -336,6 +356,10 @@ bmInit(cv, [0, 0, 0, 1]).then(() => {
 
     // ── unicorn: beat bounce + lane-driven lean, all one pose function. It faces
     // +x (toward the track), so lean is a roll about x and the nod a pitch about z.
+    // One landing per milestone; stronger jumps and a full eased turn from 20 onward.
+    const celebration = state === 1 ? clamp((t - milestoneT) / 1.1, 0, 1) : 1;
+    const jump = Math.sin(celebration * Math.PI) * Math.min(milestone, 3) * 0.32;
+    const spin = milestone > 1 ? celebration * celebration * (3 - 2 * celebration) * 6.283185 * Math.min(milestone - 1, 2) : 0;
     const ph = beats % 1, bounce = Math.sin(ph * Math.PI);
     curLX += (leanX - curLX) * (dt * 14); leanX *= Math.pow(0.02, dt);
     curLY += (leanY - curLY) * (dt * 14); leanY *= Math.pow(0.02, dt);
@@ -351,17 +375,28 @@ bmInit(cv, [0, 0, 0, 1]).then(() => {
       M = bmMul(M, bmScale(-S * 1.15, S * 1.15, S * 1.15));
     } else {
       // side view: bottom-left during play and menus; centre stage on the title
-      M = bmTrans((playing ? UNI[0] : 0) + curLX * 0.2, UNI[1] + bounce * 0.08 + curHop * 0.25 - (state === 4 ? 0.25 : 0), state ? UNI[2] : -3.4);
+      M = bmTrans((playing ? UNI[0] : 0) + curLX * 0.2, UNI[1] + jump + bounce * 0.08 + curHop * 0.25 - (state === 4 ? 0.25 : 0), state ? UNI[2] : -3.4);
       M = bmMul(M, bmRotX(curLX * 0.28));
       M = bmMul(M, bmRotZ(curLY * 0.22));
-      M = bmMul(M, bmRotY(1.5708 + curLX * 0.2 - (playing ? 0 : 0.65)));   // title: turned toward the camera for a 3/4 view
+      M = bmMul(M, bmRotY(spin + 1.5708 + curLX * 0.2 - (playing ? 0 : 0.65)));   // title: turned toward the camera for a 3/4 view
       M = bmMul(M, bmScale(-S * (1 + sq * 0.04), S * (1 - sq * 0.08), S * (1 + sq * 0.04)));
     }
-    uLit.set([...VP, ...M, 0.4, 1, 0.6, 0, ...hsv(TRACK_H[kk], 0.55, 0.42)]);   // vp, model, light dir (padded), fog colour
+    const charge = state === 1 ? Math.min(combo / 30, 1) : 0;
+    const breath = 0.8 + Math.sin(now * 2.4) * 0.2;
+    uLit.set([...VP, ...M, 0.4, 1, 0.6, charge * breath, ...hsv(TRACK_H[kk], 0.55, 0.42)]);   // vp, model, light dir (padded), fog colour
     bmUniforms(pUni, uLit); bmDraw(pUni);
 
     // ── charms: receptors, notes (far to near, for blending), particles
     ni = 0;
+    // Charge aura stays on the ground while the unicorn jumps; a miss clears combo.
+    if (state === 1 && combo) {
+      for (let i = 0; i < 48; i++) {
+        const angle = i / 48 * 6.283185;
+        inst(UNI[0] + Math.cos(angle) * (0.81 + breath * 0.06), UNI[1] - 0.08,
+          UNI[2] + Math.sin(angle) * (0.61 + breath * 0.06), 4, [0.3, 0.75, 1],
+          charge * breath, 0.1 + charge * breath * 0.12);
+      }
+    }
     for (let i = 0; i < LANES; i++) {
       const flash = clamp(1 - (t - flashes[i]) / 0.22, 0, 1);
       if (flash) {
