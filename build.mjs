@@ -123,8 +123,8 @@ writeFileSync(join(dist, 'index.html'), page);
 // ── zip: zopfli's deflate beats Info-ZIP's by a few hundred bytes, and writing
 // the container by hand skips the timestamp extra fields zip(1) adds.
 const html = Buffer.from(page);
-// ZOPFLI=5000 for the submission build: ~7 bytes smaller, ~10x slower.
-const comp = Buffer.from(await deflateAsync(html, { numiterations: +process.env.ZOPFLI || 500, blocksplitting: true, blocksplittingmax: 0 }));
+// Use submission-strength compression by default; ZOPFLI overrides the iteration count.
+const comp = Buffer.from(await deflateAsync(html, { numiterations: +process.env.ZOPFLI || 5000, blocksplitting: true, blocksplittingmax: 0 }));
 const crcT = new Int32Array(256).map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c; });
 let crc = -1;
 for (const x of html) crc = crcT[(crc ^ x) & 255] ^ (crc >>> 8);

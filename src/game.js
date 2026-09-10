@@ -50,6 +50,7 @@ let ac, t0, songLen, bpm = 120, songSrc;
 let sel = 0, unlocked = +localStorage.rr_u || 1, won = 0;   // rr_ prefix: js13k games share an origin
 let introSrc, introT0 = 0;
 let chart = [], nextNote = 0;
+let target, passed;
 let score = 0, combo = 0, maxCombo = 0, milestone = 0, milestoneT = -9;
 let judge = '', judgeT = -9, judgeCol = '#fff', judgeK = 0;
 const counts = [0, 0, 0, 0];         // perfect great good miss
@@ -94,11 +95,11 @@ function press(lane) {
     if (k < 2) for (const tone of [1, 0.4]) {
       const o = ac.createOscillator(), gain = ac.createGain(), at = ac.currentTime;
       o.type = 'triangle';
-      o.frequency.setValueAtTime(420 * tone, at);
+      o.frequency.setValueAtTime(440 * tone, at);
       o.frequency.exponentialRampToValueAtTime(65 * tone, at + 0.025);
       gain.gain.setValueAtTime(k ? 0.18 : 0.28, at);
       gain.gain.exponentialRampToValueAtTime(0.001, at + 0.12);
-      o.connect(gain); gain.connect(ac.destination); o.start(at); o.stop(at + 0.13);
+      o.connect(gain); gain.connect(ac.destination); o.start(at); o.stop(at + 0.12);
     }
     if (k < 2) bursts.push({ t, lane, big: k === 0 });
     if (combo % 10 === 0) for (let i = 0; i < 4; i++) i !== lane && bursts.push({ t, lane: i, big: 1 });   // every 10th: all lanes erupt
@@ -131,6 +132,8 @@ function start() {
   const g = sel === TRACKS ? BONUS : (SONGS[sel] || SONGS[0]);   // sel 7 = the secret bonus track
   [songSrc, bpm, songLen] = play(g, 0, t0 = ac.currentTime + 2.2);
   chart = makeChart(g, bpm);
+  target = Math.ceil(chart.reduce((sum, n, i) => sum + 60 * (1 + Math.min(i + 1, 50) / 50), 0));
+  passed = false;
   nextNote = 0; score = 0; combo = 0; maxCombo = 0; won = 0; judge = ''; milestoneT = -9; counts.fill(0); bursts.length = 0; flashes.fill(-9);
   state = 1;
 }
@@ -142,7 +145,7 @@ function go(k) {
     else if (k === 'Enter' || k === ' ' || k === '') start();
   } else if (state === 2) {
     if (k === 'Escape' || k === 1) toSelect();
-    else if (k === 'Enter' || k === '') { sel = won === 2 ? TRACKS : Math.min(sel + 1, unlocked - 1); start(); }
+    else if (k === 'Enter' || k === '') { sel = won === 2 ? TRACKS : sel + (passed && sel + 1 < unlocked); start(); }
   } else if (state === 5) toSelect();
 }
 
@@ -172,7 +175,7 @@ function drawHud(t, now) {
   hx.clearRect(0, 0, W, H);
   hx.textAlign = 'center'; hx.lineJoin = 'round';
   hx.shadowColor = '#210d38'; hx.shadowOffsetY = state ? 0 : 5;
-  const font = (size) => hx.font = `${'italic 900'} ${size}px system-ui,sans-serif`;
+  const font = (size) => hx.font = `${'italic 900'} ${size}px system-ui`;
   const txt = (s, x, y, size, fill, stroke) => {
     font(size);
     hx.lineWidth = size / 7; hx.strokeStyle = stroke || '#fff'; hx.strokeText(s, x, y);
@@ -247,7 +250,7 @@ function drawHud(t, now) {
       hx.globalAlpha = a; txt(judge, cx, H * 0.58, [78, 54, 40, 28][judgeK], judgeCol, '#fff'); hx.globalAlpha = 1;
     }
     hx.textAlign = 'right'; txt(Math.round(score), W - 24, 52, 36, '#fff', '#c66ad0');
-    if (t < 0) { hx.textAlign = 'center'; txt(NAMES[sel] || 'ENCORE', W / 2, H * 0.24, Math.min(W / 20, 60), css(hsv(TRACK_H[Math.min(sel, 6)], 0.65, 1)), '#34104d'); txt('GET READY', W / 2, H * 0.34, 32, '#fff', '#34104d'); }
+    if (t < 0) { hx.textAlign = 'center'; txt(NAMES[sel] || 'ENCORE', W / 2, H * 0.24, Math.min(W / 20, 60), css(hsv(TRACK_H[Math.min(sel, 6)], 0.65, 1)), '#34104d'); txt(`${target} TO CLEAR`, W / 2, H * 0.34, 32, '#fff', '#34104d'); }
   } else if (state === 5) {
     rb('RHYTHM RAINBOW', H * 0.24, Math.min(W / 9, 90));
     txt('you danced the whole rainbow', W / 2, H * 0.44, 28, '#fff', '#7040a0');
@@ -257,14 +260,10 @@ function drawHud(t, now) {
     txt('press any key', W / 2, H * 0.82, 26, '#fff', '#fff');
   } else {
     if (won === 2) { txt('YOU UNLOCKED', W / 2, H * 0.15, 40, '#fff', '#c66ad0'); rb('THE RAINBOW', H * 0.15 + 64, 64); }
-    else txt('STAGE COMPLETE', W / 2, H * 0.24, Math.min(W / 18, 60), '#ffe9ff', '#34104d');
-    txt(`SCORE  ${Math.round(score)}`, W / 2, H * 0.24 + 70, 40, '#fff', '#c66ad0');
+    else txt(`STAGE ${passed ? 'COMPLETE' : 'FAILED'}`, W / 2, H * 0.24, Math.min(W / 18, 60), '#ffe9ff', '#34104d');
+    txt(`SCORE ${Math.round(score)} / ${target} TO CLEAR`, W / 2, H * 0.24 + 70, 40, '#fff', '#c66ad0');
     txt(`MAX COMBO  ${maxCombo}`, W / 2, H * 0.24 + 120, 32, '#fff', '#c66ad0');
-    txt(`PERFECT ${counts[0]}   GREAT ${counts[1]}   GOOD ${counts[2]}   MISS ${counts[3]}`, W / 2, H * 0.24 + 165, 24, '#fff', '#7040a0');
-    if (won === 1) {
-      txt(`${NAMES[sel + 1]} UNLOCKED`, W / 2, H * 0.24 + 240, 44, css(hsv(TRACK_H[sel + 1], 0.85, 1)), '#fff');
-    }
-    txt(won === 2 ? 'ENTER · ENCORE' : sel + 1 < unlocked ? 'ENTER · NEXT STAGE' : 'ENTER · RETRY', W / 2, H * 0.77, 30, '#fff', '#34104d');
+    txt(won === 2 ? 'ENTER · ENCORE' : passed && sel + 1 < unlocked ? 'ENTER · NEXT STAGE' : 'ENTER · TRY AGAIN', W / 2, H * 0.77, 30, '#fff', '#34104d');
     txt('↓ · STAGE SELECT', W / 2, H * 0.87, 24, '#bba9d2', '#34104d');
   }
   hx.globalAlpha = 1;
@@ -311,11 +310,11 @@ bmInit(cv, [0, 0, 0, 1]).then(() => {
       }
       if (t > songLen + 1.5) {
         state = 2;
-        // clearing a track (half its notes hit) unlocks the next colour
-        const clear = chart.length - counts[3] >= chart.length / 2;
-        if (clear && sel + 1 < TRACKS && unlocked === sel + 1) { won = 1; localStorage.rr_u = unlocked = sel + 2; }
-        if (clear && sel === TRACKS - 1) won = 2;   // the ending: the whole rainbow is beaten
-        if (sel === TRACKS) { won = 2; state = 5; [songSrc, bpm] = play(INTRO, 1, ac.currentTime); }   // beat the bonus -> credits, over the title loop
+        // Reaching the target score unlocks the next colour.
+        passed = score >= target;
+        if (passed && sel + 1 < TRACKS && unlocked === sel + 1) { won = 1; localStorage.rr_u = unlocked = sel + 2; }
+        if (passed && sel === TRACKS - 1) won = 2;   // the ending: the whole rainbow is beaten
+        if (passed && sel === TRACKS) { won = 2; state = 5; [songSrc, bpm] = play(INTRO, 1, ac.currentTime); }   // beat the bonus -> credits, over the title loop
       }
     }
 
@@ -338,9 +337,9 @@ bmInit(cv, [0, 0, 0, 1]).then(() => {
     // ── unicorn: beat bounce + lane-driven lean, all one pose function. It faces
     // +x (toward the track), so lean is a roll about x and the nod a pitch about z.
     const ph = beats % 1, bounce = Math.sin(ph * Math.PI);
-    curLX += (leanX - curLX) * Math.min(1, dt * 14); leanX *= Math.pow(0.02, dt);
-    curLY += (leanY - curLY) * Math.min(1, dt * 14); leanY *= Math.pow(0.02, dt);
-    curHop += (hop - curHop) * Math.min(1, dt * 16); hop *= Math.pow(0.005, dt);
+    curLX += (leanX - curLX) * (dt * 14); leanX *= Math.pow(0.02, dt);
+    curLY += (leanY - curLY) * (dt * 14); leanY *= Math.pow(0.02, dt);
+    curHop += (hop - curHop) * (dt * 16); hop *= Math.pow(0.005, dt);
     const sq = 1 - bounce, S = UNI[3] * (state ? 1 : 1.1), party = (won === 2 && state === 2) || state === 5;
     let M;
     if (party) {
@@ -401,6 +400,6 @@ bmInit(cv, [0, 0, 0, 1]).then(() => {
   });
 }, () => {
   hud.width = innerWidth; hud.height = innerHeight;
-  hx.font = '900 28px system-ui,sans-serif'; hx.textAlign = 'center'; hx.fillStyle = '#fff';
+  hx.font = '900 28px system-ui'; hx.textAlign = 'center'; hx.fillStyle = '#fff';
   hx.fillText('THIS GAME NEEDS A WEBGPU BROWSER', innerWidth / 2, innerHeight / 2);
 });

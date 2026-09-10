@@ -44,6 +44,8 @@ const stats = { draws: 0, tris: 0, writes: 0, frames: 0 };
 let raf = [];
 const listeners = {};
 let audioTime = 0;
+const voices = [];
+const effects = [];
 const ctx2d = proxy('ctx2d');
 const canvas = (id) => ({ id, clientWidth: 1280, clientHeight: 720, width: 0, height: 0,
   getContext: (k) => (k === 'webgpu' ? { configure: noop, getCurrentTexture: () => ({ createView: () => ({}) }) } : ctx2d) });
@@ -58,8 +60,8 @@ const sandbox = {
   localStorage: {}, performance: { now: () => stats.frames * 16 },
   addEventListener: (k, f) => (listeners[k] = listeners[k] || []).push(f),
   AudioContext: class { constructor() { this.sampleRate = 48000; this.destination = {}; } get currentTime() { return audioTime; }
-    createBuffer(ch, len, sr) { stats.audioLen = len / sr; return { copyToChannel: (d) => { if (d.some((v) => v !== v)) errors.push('NaN in audio'); } }; }
-    createOscillator() { return {frequency: {setValueAtTime: noop, exponentialRampToValueAtTime: noop}, connect: noop, start: noop, stop: noop}; }
+    createBuffer(ch, len, sr) { stats.audioLen = len / sr; return { copyToChannel: (d) => { if (d.some((v) => v !== v)) errors.push('NaN in audio'); if (ch === 1) effects.push(d); } }; }
+    createOscillator() { const voice = {}; voices.push(voice); return {frequency: {setValueAtTime: noop, exponentialRampToValueAtTime: (f) => voice.pitch = f}, connect: noop, start: t => voice.start = t, stop: t => voice.stop = t}; }
     createGain() { return {gain: {setValueAtTime: noop, exponentialRampToValueAtTime: noop}, connect: noop}; }
     createBufferSource() { return { connect: noop, stop: noop, start: (t) => { stats.audioStart = t; } }; } },
 };
@@ -93,13 +95,35 @@ if (!MIN) {
   key('ArrowLeft'); check(g('sel') === 0, 'left navigation failed');
   vm.runInContext('flashes.fill(1000)', sandbox);
   pointer(640 - 2 * gap, y); check(g('flashes.every(t => t === -9)'), 'previous song hit flashes leaked into new song'); check(g('state') === 1 && g('sel') === 1, 'stage click did not start selected song');
-  vm.runInContext('state = 2; sel = 0; unlocked = 2; won = 1', sandbox);
+  vm.runInContext('state = 2; sel = 0; unlocked = 2; won = 1; passed = true', sandbox);
   key('Enter'); check(g('state') === 1 && g('sel') === 1, 'Enter failed to advance');
   vm.runInContext('state = 2', sandbox); key('ArrowDown'); check(g('state') === 4, 'Down failed to open selection');
-  vm.runInContext('state = 2; sel = 0', sandbox); pointer(640, 720 * 0.77);
+  vm.runInContext('state = 2; sel = 0; passed = true', sandbox); pointer(640, 720 * 0.77);
   check(g('state') === 1 && g('sel') === 1, 'Next click failed');
-  vm.runInContext('state = 2; sel = 0; unlocked = 1; won = 0', sandbox);
+  vm.runInContext('state = 2; sel = 0; unlocked = 1; won = 0; passed = false', sandbox);
   key('Enter'); check(g('state') === 1 && g('sel') === 0, 'retry opened locked stage');
+  for (const delta of [-1, 0]) {
+    vm.runInContext('sel = 0; unlocked = 1; start()', sandbox);
+    const required = g('target');
+    check(required === Math.ceil(g('chart').reduce((s, n, i) => s + 60 * (1 + Math.min(i + 1, 50) / 50), 0)), 'incorrect target');
+    vm.runInContext(`score = target + ${delta}`, sandbox);
+    audioTime = g('t0 + songLen + 2'); frame(16);
+    check(g('passed') === (delta === 0), 'clear threshold boundary failed');
+    check(g('unlocked') === (delta === 0 ? 2 : 1), 'unlock threshold failed');
+  }
+  vm.runInContext('state = 2; passed = false; sel = 0; unlocked = 7; won = 0', sandbox);
+  key('Enter'); check(g('sel') === 0, 'failed replay advanced to next stage');
+  vm.runInContext('state = 2; passed = false; sel = 7; won = 0', sandbox);
+  key('Enter'); check(g('sel') === 7, 'failed encore did not retry encore');
+  for (const comboBefore of [8, 9, 19, 29]) {
+    vm.runInContext('sel = 0; start()', sandbox);
+    vm.runInContext(`combo = ${comboBefore}`, sandbox);
+    audioTime = g('t0 + chart[0].t + 0.1');
+    const before = voices.length, effectsBefore = effects.length;
+    vm.runInContext('press(chart[0].lane)', sandbox);
+    check(voices.length === before && effects.length === effectsBefore, 'unexpected combo celebration sound');
+    if (comboBefore !== 8) check(g('milestoneT') === g('songTime()'), 'visual combo celebration missing');
+  }
   vm.runInContext('toSelect(); sel = 0; unlocked = 1', sandbox);
 }
 key('Space'); key('Enter');
