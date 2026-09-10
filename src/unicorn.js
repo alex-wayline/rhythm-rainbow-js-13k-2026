@@ -1,7 +1,7 @@
 // ── Procedural chibi unicorn (see chibi2.mjs for the annotated version) ──────
 // Chibi unicorn v2. Shape grammar taken from the reference:
 //   - rounded boxes (superellipsoids) for head, muzzle, body, legs, hooves
-//   - flat striped ribbons for the tail, mane and forelock
+//   - rounded, tapered locks for the tail, mane and forelock
 //   - a glossy gold cone for the horn
 // Everything below is one of those three primitives.
 
@@ -87,25 +87,6 @@ function ribbon(m, curve, R, color, hint) {
   }
 }
 
-// ── striped band: a flat clay ribbon of several colour strips laid side by
-//    side (tail, mane, forelock). pts = [[x,y,z,w,c]...] control points: w is
-//    the strip half-width and c squeezes the strips together (1 = one strip
-//    width apart, 0 = all on the centre line). The centre line is splined
-//    first and each strip is that curve shifted along its in-plane normal
-//    (perpendicular to the tangent, in the plane whose normal is `side`), so
-//    the strips tile into one band and stay smooth through every bend. side
-//    may also be a centre point [x,y,z,1]: the normal is then radial from it,
-//    so the strips wrap around a round surface (the mane over the head).
-function strips(m, pts, cols, steps, R, side) {
-  const C = spline(pts, steps);
-  cols.forEach((col, k) => {
-    ribbon(m, C.map((p, i) => {
-      const n = norm(cross(sub(C[Math.min(i + 1, C.length - 1)], C[Math.max(i - 1, 0)]), side[3] ? sub(p, side) : side));
-      return [...add(p, scl(n, (k - (cols.length - 1) / 2) * 1.9 * p[3] * p[4])), p[3], p[3] * 0.7];
-    }), R, col, side);
-  });
-}
-
 // ── straight cone from a to b: radius r at the base, closing to a point at b.
 //    Built as stacked frustums so every band gets its own flat colour: `lines`
 //    thin rings in the darker colour cols[1], evenly spaced along the length.
@@ -131,7 +112,7 @@ function cone(m, a, b, r, R, cols, lines) {
 
 // ────────────────────────────────────────────────────────────────────────────
 const WHITE  = [0.99, 0.985, 1.0];
-const MUZZLE = [0.98, 0.74, 0.86];
+const MUZZLE = [0.98, 0.74, 0.86], SNOUT = [1, 0.91, 0.95];
 const HOOF   = [0.97, 0.62, 0.83];
 const IRIS   = [0.58, 0.40, 0.72];
 const DARK   = [0.10, 0.06, 0.14];
@@ -142,7 +123,7 @@ const BODY = [0, 0.6, -0.2], BR = [0.46, 0.44, 0.56];
 
 // pal: seven hair colours (mane, forelock, tail) — the level's palette.
 function buildUnicorn(Q, pal) {
-  const [RED, ORANGE, YELLOW, GREEN, BLUE, INDIGO, VIOLET] = pal;   // level hues (all red on level 1)
+  const [RED, ORANGE, YELLOW, GREEN, BLUE, INDIGO, VIOLET] = pal.map(c => c.map(v => 0.24 + v * 0.76));   // level hues (all red on level 1)
   const m = { pos: [], nrm: [], col: [], idx: [] };
   const R = 8 + Q * 4, S = 3 + Q, LAT = 8 + Q * 5, LON = 12 + Q * 7;
   const E = 0.9;                             // roundness of all the loaves (higher = rounder, cuter)
@@ -154,16 +135,25 @@ function buildUnicorn(Q, pal) {
   const HF = [[1, 0, 0], [0, ct, st], [0, -st, ct]];
 
   // ── masses
-  loaf(m, HEAD, [0.54, 0.52, 0.5], E, WHITE, LAT, LON, HF);              // egg-shaped head, tilted forward, a touch wider
-  loaf(m, til([0, 1.19, 0.6]), [0.29, 0.22, 0.28], 0.85, MUZZLE, LAT, LON, HF);   // rounded muzzle, tilted with the head
-  for (const sx of [-1, 1]) {   // nostrils: muzzle-coloured donut, angled in and tilted so the bottom sinks into the muzzle
-    const ca = Math.cos(sx * 0.25), sa = Math.sin(sx * 0.25), ring = [];
-    for (let j = 0; j <= 16; j++) {
-      const a = j / 16 * 6.2832, ex = 0.036 * Math.cos(a), ey = 0.044 * Math.sin(a);
-      ring.push(til([sx * 0.088 + ex * ca - ey * sa, 1.2 + ex * sa + ey * ca, 0.868 + 0.008 * Math.sin(a), 0.016, 0.016]));
+  loaf(m, HEAD, [0.54, 0.52, 0.5], E, WHITE, LAT, LON, HF); // original slightly oval head proportions
+  // Blush is painted into the head vertices, so it follows the cheek exactly.
+  for (let i = 0; i < m.pos.length; i += 3) {
+    const a = Math.max(0, 1 - Math.hypot((Math.abs(m.pos[i]) - 0.46) / 0.15, (m.pos[i + 1] - 1.23) / 0.12, (m.pos[i + 2] - 0.5) / 0.16));
+    for (let j = 0; j < 3; j++) m.col[i + j] = WHITE[j] * (1 - a) + MUZZLE[j] * a;
+  }
+  loaf(m, til([0, 1.19, 0.6]), [0.29, 0.22, 0.28], 0.85, SNOUT, LAT, LON, HF);   // rounded muzzle, tilted with the head
+  // Small oval nostrils lie directly on the curved muzzle surface.
+  for (const sx of [-1, 1]) {
+    const base = m.pos.length / 3;
+    for (let j = 0; j <= 17; j++) {
+      const a = (j - 1) / 16 * 6.2832;
+      const x = sx * 0.088 + (j ? 0.018 * Math.cos(a) : 0);
+      const y = 0.01 + (j ? 0.025 * Math.sin(a) : 0);
+      const z = 0.6 + 0.28 * Math.pow(1 - Math.pow(Math.abs(x / 0.29), 2 / 0.85) - Math.pow(Math.abs(y / 0.22), 2 / 0.85), 0.85 / 2);
+      m.pos.push(...til([x, 1.19 + y, z + 0.001]));
+      m.nrm.push(...HF[2]); m.col.push(0.88, 0.69, 0.76);
+      if (j > 1) m.idx.push(base, base + j - 1, base + j);
     }
-    ribbon(m, ring, 10, MUZZLE, [0, 0, 1]);
-    loaf(m, til([sx * 0.088, 1.2, 0.85]), [0.02, 0.026, 0.02], 1, [0.55, 0.32, 0.4], 6, 8, HF);   // recessed dark hole
   }
   loaf(m, BODY, BR, E, WHITE, LAT, LON);
   for (const [x, z] of [[0.22, 0.12], [-0.22, 0.12], [0.22, -0.46], [-0.22, -0.46]]) {
@@ -181,7 +171,7 @@ function buildUnicorn(Q, pal) {
     at(0.00, [0.202, 0.227, 0.05], DARK);     // thin outline
     at(0.025, [0.19, 0.215, 0.05], WHITE);
     at(0.05, [0.165, 0.19, 0.045], IRIS);
-    at(0.07, [0.12, 0.14, 0.04], DARK);
+    at(0.07, [0.135, 0.155, 0.04], DARK);
     loaf(m, add(add(C, scl(Z, 0.1)), add(scl(X, -sx * 0.05), scl(Y, 0.06))), [0.05, 0.05, 0.02], 1, WHITE, 6, 8, F);
     loaf(m, add(add(C, scl(Z, 0.105)), add(scl(X, sx * 0.05), scl(Y, -0.06))), [0.022, 0.022, 0.012], 1, WHITE, 6, 8, F);
     // lashes: three thin even-width lines on the upper-BACK arc of the outline
@@ -203,29 +193,44 @@ function buildUnicorn(Q, pal) {
     const rot = (v) => [v[0], ct * v[1] - st * v[2], st * v[1] + ct * v[2]];  // same tilt as til(), for vectors
     const F = [rot(cross(L, N)), rot(L), rot(N)];
     const C = add([sx * 0.32, 1.72, 0.17], scl(L, 0.1));                    // root buried in the head
-    loaf(m, til(C), [0.1, 0.18, 0.035], 1, WHITE, 14, 20, F);
-    loaf(m, til(add(add(C, scl(L, -0.01)), scl(N, 0.015))), [0.082, 0.15, 0.03], 1, MUZZLE, 14, 20, F);
+    loaf(m, til(C), [0.11, 0.22, 0.045], 1, WHITE, 14, 20, F);
+    loaf(m, til(add(add(C, scl(L, -0.01)), scl(N, 0.015))), [0.08, 0.175, 0.04], 1, MUZZLE, 14, 20, F);
   }
 
   // ── horn: a plain straight gold cone rooted at the forehead, pointing
   // up-and-forward. It never follows the level palette; only the hair does.
   // Both golds have red > 1, which is what the Lit shader keys the gloss on.
-  cone(m, [0, 1.64, 0.64], [0, 2.3, 1.06], 0.13, R, [[1.35, 1.05, 0.4], [1.22, 0.86, 0.28]], 5);   // gold with darker gold rings
+  cone(m, [0, 1.84, 0.53], [0, 2.35, 0.84], 0.13, R, [[1.35, 1.05, 0.4], [1.22, 0.86, 0.28]], 5);   // gold with darker gold rings
 
-  // ── tail: three strips, all the same length, on one small smooth S: lifts
-  // off the rump, arcs back and down, then a little hook at the bottom
-  // pointing away from the unicorn. Squeezed to converge at the root and to a
-  // single point at the tip.
-  strips(m, [[0, 0.86, -0.5, 0.015, 0.5], [0, 1.0, -0.72, 0.05, 0.85], [0, 0.95, -0.92, 0.06, 1], [0, 0.78, -1.02, 0.06, 1], [0, 0.6, -1.0, 0.055, 1], [0, 0.44, -1.05, 0.045, 0.9], [0, 0.36, -1.16, 0.03, 0.6], [0, 0.37, -1.26, 0.005, 0]], [YELLOW, INDIGO, VIOLET], S + 4, R, [1, 0, 0]);
-
-  // ── mane: one five-strip band draped over the whole head, front to back,
-  // shaped like the tail at both ends. Bangs come down the forehead on both
-  // sides of the horn, meet in a point between the eyes and hook forward; the
-  // band widens over the crown (no bald spot), then flows down the back of the
-  // neck in an S, falling to the +x flank, and hooks forward low on the
-  // shoulder. The radial side wraps it around the head.
-  strips(m, [[0, 1.46, 0.83, 0.012, 1.6], [0, 1.5, 0.79, 0.04, 1.7], [0, 1.62, 0.74, 0.06, 1.7], [0, 1.78, 0.64, 0.065, 1.6], [0, 1.94, 0.42, 0.065, 1.1], [0.05, 1.9, 0.12, 0.065, 1], [0.15, 1.68, -0.12, 0.065, 1], [0.3, 1.36, -0.34, 0.065, 1], [0.42, 1.02, -0.24, 0.06, 1], [0.5, 0.74, -0.38, 0.05, 0.8], [0.56, 0.58, -0.2, 0.012, 0.2]].map(til),
-    [RED, ORANGE, YELLOW, GREEN, BLUE], S + 4, R, [...HEAD, 1]);
+  // One uninterrupted fin follows the crown; stripes only change its colour.
+  const crest = spline([
+    [0, 1.98, 0.22, 0.16, 0.065],
+    [0, 1.99, 0.08, 0.26, 0.085],
+    [0, 1.93, -0.08, 0.28, 0.09],
+    [0, 1.8, -0.2, 0.27, 0.085],
+    [0, 1.53, -0.36, 0.2, 0.07],
+    [0, 1.34, -0.32, 0.13, 0.055],
+    [0, 1.18, -0.2, 0.065, 0.035],
+    [0, 1.08, -0.08, 0.008, 0.008]
+  ].map(til), S + 5);
+  const start = m.col.length, colors = [RED, ORANGE, YELLOW, GREEN, BLUE, INDIGO, VIOLET];
+  ribbon(m, crest, R, RED, [1, 0, 0]);
+  for (let i = start; i < m.col.length; i += 3) {
+    const c = colors[Math.min(6, Math.floor((i - start) / (3 * R * crest.length) * 7))];
+    for (let j = 0; j < 3; j++) m.col[i + j] = c[j];
+  }
+  // Keep the full, curled tail.
+  [INDIGO, ORANGE, VIOLET].forEach((col, k) => {
+    const d = k * 0.13;
+    ribbon(m, spline([
+      [d - 0.13, 0.88, -0.63, 0.035, 0.04],
+      [d - 0.13, 1.02, -0.9, 0.12, 0.1],
+      [d - 0.13, 0.85, -1.15, 0.135, 0.11],
+      [d - 0.13, 0.47, -1.2, 0.12, 0.1],
+      [d - 0.13, 0.35, -1.37, 0.075, 0.07],
+      [d - 0.13, 0.48, -1.44, 0.008, 0.009]
+    ], S + 3), R, col, [1, 0, 0]);
+  });
 
   return pack(m);
 }
