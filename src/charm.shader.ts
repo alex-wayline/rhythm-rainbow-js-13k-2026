@@ -44,7 +44,7 @@ export const Charm = shader({
     // the lane plane, stretched along the track to undo the foreshortening, so
     // perspective lines them up with the lane edges.
     const flat = step(4.5, iPos.w);
-    const p = vec3(iPos.x + aPos.x * iScale, iPos.y + (aPos.y + 1) * iScale * 0.77 * (1 - flat), iPos.z + aPos.y * iScale * mix(0.64, 0 - 2.3, flat));   // flat: quad up = away from the camera = up on screen
+    const p = vec3(iPos.x + aPos.x * iScale, iPos.y + 0.06 * flat + (aPos.y + 1) * iScale * 0.77 * (1 - flat), iPos.z + aPos.y * iScale * mix(0.64, 0 - 2.3 + min(iPos.z, 0) * 0.2, flat));   // flat: quad up = away from the camera = up on screen
     return uVp.mul(vec4(p, 1));
   },
 
@@ -55,46 +55,31 @@ export const Charm = shader({
     const col = vCol.xyz;
     const soft = 0.035;
 
-    // ── charm icons, drawn at 70% so they sit inside the tile
-    const s = p.scale(1 / 0.7);
-    const r = length(s);
-    const dHorse = max(abs(r - 0.58) - 0.2, 0 - s.y - 0.3);
-    const ang = acos(s.x / max(r, 0.0001)) * sign(s.y + 0.00001);
-    const spike = pow(0.5 + 0.5 * cos(5 * ang), 3);
-    const dStar = r - (0.3 + 0.5 * spike);
-    const c1 = length(s.sub(vec2(0, 0.34))) - 0.34;
-    const c2 = length(s.sub(vec2(0 - 0.33, 0 - 0.14))) - 0.34;
-    const c3 = length(s.sub(vec2(0.33, 0 - 0.14))) - 0.34;
-    const stem = length(vec2(max(abs(s.x) - 0.07, 0), max(abs(s.y + 0.56) - 0.26, 0))) - 0.02;
-    const dClover = min(min(c1, c2), min(c3, stem));
-    const dMoon = max(r - 0.66, 0 - (length(s.sub(vec2(0.34, 0.14))) - 0.56));
-    const d1 = mix(dHorse, dStar, step(0.5, shape));
-    const d2 = mix(d1, dClover, step(1.5, shape));
-    const dIcon = mix(d2, dMoon, step(2.5, shape)) * 0.7;
+    const lane = shape - 5 * step(4.5, shape);
+    let rot = 4.7124;
+    rot = mix(rot, 3.1416, step(0.5, lane));
+    rot = mix(rot, 0, step(1.5, lane));
+    rot = mix(rot, 1.5708, step(2.5, lane));
+    const iconScale = mix(2.4, 1.7, step(4.5, shape));
+    const dIcon = sdTri(rotate2(p.scale(iconScale), rot)) / iconScale;
 
     // ── tile behind the icon: glossy, lane-coloured, white rim, soft halo
-    const dTile = sdRoundedBox2(p, vec2(0.82, 0.82), 0.24);
+    const dTile = sdRoundedBox2(p, vec2(0.76, 0.76), 0.22);
     const tileFill = 1 - smoothstep(0 - soft, soft, dTile);
-    const shade = mix(col.scale(0.8), col.scale(1.1).add(vec3(0.12, 0.12, 0.12)), (p.y + 1) * 0.5);
-    const sheen = smoothstep(0.14, 0, abs(p.x + p.y * 0.6 - 0.55)) * 0.45;
-    const rim = smoothstep(0 - 0.2, 0 - 0.1, dTile);
-    let tileCol = mix(shade, vec3(1, 1, 1), rim * 0.85 + sheen);
-    const iconEdge = 1 - smoothstep(0.02, 0.1, dIcon);
+    const shade = mix(col.scale(0.45), col.scale(1.05), (p.y + 1) * 0.5);
+    const sheen = exp(0 - dot(p.sub(vec2(0 - 0.25, 0.5)), p.sub(vec2(0 - 0.25, 0.5))) * 5) * 0.22;
+    const rim = smoothstep(0 - 0.06, 0, dTile);
+    let tileCol = mix(shade, mix(col.scale(0.3), vec3(0.8, 0.9, 1), smoothstep(0 - 0.5, 0.8, p.y)), rim * 0.6);
+    tileCol = tileCol.add(vec3(sheen, sheen, sheen));
     const iconFill = 1 - smoothstep(0 - soft, soft, dIcon);
-    tileCol = mix(tileCol, col.scale(0.45), iconEdge * 0.8);
     tileCol = mix(tileCol, vec3(1, 1, 1), iconFill);
-    const halo = exp(0 - max(dTile, 0) * 5) * 0.55;
-    const aTile = max(tileFill, halo);
+    const aTile = tileFill * max(0.9, iconFill);
 
     // ── particle dot
-    const aDot = 1 - smoothstep(0 - soft, soft, length(p) - 0.72);
+    const aDot = 1 - smoothstep(0, 0.9, length(p));
 
     // ── receptor triangle, rotated per lane; glows when pressed
-    let rot = 4.7124;
-    rot = mix(rot, 3.1416, step(5.5, shape));
-    rot = mix(rot, 0, step(6.5, shape));
-    rot = mix(rot, 1.5708, step(7.5, shape));
-    const dArrow = sdTri(rotate2(p, rot));
+    const dArrow = dIcon;
     const fillA = 1 - smoothstep(0 - soft, soft, dArrow);
     const aArrow = max(fillA, exp(0 - max(dArrow, 0) * 4) * 0.6 * pressed);
 

@@ -111,7 +111,7 @@ writeFileSync(join(dist, 'raw.js'), parts.join('\n'));
 // program's own object literals. Never add a DOM, WebGPU or AudioContext key
 // (blend, format, size, usage, buffer, code, key, currentTime, ...).
 run('npx', ['terser', join(dist, 'raw.js'), '--compress', 'passes=3,unsafe=true,unsafe_arrows=true,unsafe_math=true,unsafe_comps=true,unsafe_methods=true,unsafe_proto=true,unsafe_undefined=true,pure_getters=true,booleans_as_integers=true,hoist_props=true,hoist_funs=true',
-  '--mangle', '--toplevel', '--mangle-props', 'regex=/^(rowLen|endPattern|songData|lane|hit|pos|nrm|col|idx|zwrite|ub|ix|bg)$/',
+  '--mangle', '--toplevel', '--mangle-props', 'regex=/^(rowLen|endPattern|songData|order|pats|big|lane|hit|pos|nrm|col|idx|zwrite|ub|ix|bg)$/',
   '--ecma', '2020', '--format', 'comments=false,ascii_only=false', '-o', join(dist, 'g.js')]);
 
 const page = readFileSync(join(root, 'src/index.html'), 'utf8').replace(

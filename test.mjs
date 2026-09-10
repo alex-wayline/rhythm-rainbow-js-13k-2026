@@ -59,6 +59,8 @@ const sandbox = {
   addEventListener: (k, f) => (listeners[k] = listeners[k] || []).push(f),
   AudioContext: class { constructor() { this.sampleRate = 48000; this.destination = {}; } get currentTime() { return audioTime; }
     createBuffer(ch, len, sr) { stats.audioLen = len / sr; return { copyToChannel: (d) => { if (d.some((v) => v !== v)) errors.push('NaN in audio'); } }; }
+    createOscillator() { return {frequency: {setValueAtTime: noop, exponentialRampToValueAtTime: noop}, connect: noop, start: noop, stop: noop}; }
+    createGain() { return {gain: {setValueAtTime: noop, exponentialRampToValueAtTime: noop}, connect: noop}; }
     createBufferSource() { return { connect: noop, stop: noop, start: (t) => { stats.audioStart = t; } }; } },
 };
 sandbox.globalThis = sandbox; sandbox.window = sandbox;
@@ -77,7 +79,30 @@ const key = (code, type = 'keydown') => (listeners[type] || []).forEach((f) => f
 
 // gate → attract → select → play
 for (let i = 0; i < 5; i++) frame(16);
-key('Digit2'); for (let i = 0; i < 20; i++) frame(16); key('Space'); key('Enter');
+key('Digit2'); for (let i = 0; i < 20; i++) frame(16);
+if (!MIN) {
+  const check = (ok, msg) => { if (!ok) errors.push(msg); };
+  for (const layout of [lanes, ['KeyA', 'KeyS', 'KeyD', 'KeyF'], ['KeyJ', 'KeyK', 'KeyL', 'Semicolon']])
+    layout.forEach((code, lane) => check(g('KEYS')[code] === lane, `wrong lane: ${code}`));
+  const pointer = (x, y) => listeners.pointerup.forEach(f => f({clientX:x, clientY:y}));
+  pointer(640, 10); check(g('state') === 4, 'background click started game');
+  const [gap, y] = g('stageLayout()');
+  pointer(640 - 2 * gap, y); check(g('state') === 4, 'locked stage started');
+  vm.runInContext('unlocked = 7', sandbox);
+  key('ArrowRight'); check(g('sel') === 1, 'right navigation failed');
+  key('ArrowLeft'); check(g('sel') === 0, 'left navigation failed');
+  vm.runInContext('flashes.fill(1000)', sandbox);
+  pointer(640 - 2 * gap, y); check(g('flashes.every(t => t === -9)'), 'previous song hit flashes leaked into new song'); check(g('state') === 1 && g('sel') === 1, 'stage click did not start selected song');
+  vm.runInContext('state = 2; sel = 0; unlocked = 2; won = 1', sandbox);
+  key('Enter'); check(g('state') === 1 && g('sel') === 1, 'Enter failed to advance');
+  vm.runInContext('state = 2', sandbox); key('ArrowDown'); check(g('state') === 4, 'Down failed to open selection');
+  vm.runInContext('state = 2; sel = 0', sandbox); pointer(640, 720 * 0.77);
+  check(g('state') === 1 && g('sel') === 1, 'Next click failed');
+  vm.runInContext('state = 2; sel = 0; unlocked = 1; won = 0', sandbox);
+  key('Enter'); check(g('state') === 1 && g('sel') === 0, 'retry opened locked stage');
+  vm.runInContext('toSelect(); sel = 0; unlocked = 1', sandbox);
+}
+key('Space'); key('Enter');
 if (MIN) {
   for (let i = 0; i < 3300; i++) { frame(16.667); if (i % 7 === 0) { const k = lanes[i % 4]; key(k); key(k, 'keyup'); } }
   console.log(`minified: ${stats.frames} frames, ${(stats.draws / stats.frames).toFixed(1)} draws/frame, ${stats.writes} buffer writes`);

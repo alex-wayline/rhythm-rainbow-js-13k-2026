@@ -111,10 +111,6 @@ function cone(m, a, b, r, R, cols, lines) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-const WHITE  = [0.99, 0.985, 1.0];
-const MUZZLE = [0.98, 0.74, 0.86], SNOUT = [1, 0.91, 0.95];
-const HOOF   = [0.97, 0.62, 0.83];
-const IRIS   = [0.58, 0.40, 0.72];
 const DARK   = [0.10, 0.06, 0.14];
 
 // Head and body centres
@@ -122,7 +118,8 @@ const HEAD = [0, 1.40, 0.30];
 const BODY = [0, 0.6, -0.2], BR = [0.46, 0.44, 0.56];
 
 // pal: seven hair colours (mane, forelock, tail) — the level's palette.
-function buildUnicorn(Q, pal) {
+function buildUnicorn(Q, pal, hue = 0.9) {
+  const WHITE = hsv(hue, 0.16, 1), MUZZLE = hsv(hue, 0.3, 0.95), SNOUT = WHITE, HOOF = hsv(hue, 0.5, 0.85), IRIS = hsv(hue + 0.16, 0.6, 0.7);
   const [RED, ORANGE, YELLOW, GREEN, BLUE, INDIGO, VIOLET] = pal.map(c => c.map(v => 0.24 + v * 0.76));   // level hues (all red on level 1)
   const m = { pos: [], nrm: [], col: [], idx: [] };
   const R = 8 + Q * 4, S = 3 + Q, LAT = 8 + Q * 5, LON = 12 + Q * 7;
@@ -156,6 +153,15 @@ function buildUnicorn(Q, pal) {
     }
   }
   loaf(m, BODY, BR, E, WHITE, LAT, LON);
+  // Thin star decal, projected onto the coat surface.
+  const badge = m.pos.length / 3;
+  for (let j = 0; j < 10; j++) {
+    const a = j * Math.PI / 4, r = j ? (j % 2 ? 0.13 : 0.045) : 0;
+    const y = 0.72 + r * Math.cos(a), z = -0.4 + r * Math.sin(a);
+    const x = BR[0] * Math.pow(1 - Math.pow(Math.abs((y - BODY[1]) / BR[1]), 2 / E) - Math.pow(Math.abs((z - BODY[2]) / BR[2]), 2 / E), E / 2);
+    m.pos.push(x + 0.009, y, z); m.nrm.push(1, 0, 0); m.col.push(...HOOF);
+    if (j > 1) m.idx.push(badge, badge + j - 1, badge + j);
+  }
   for (const [x, z] of [[0.22, 0.12], [-0.22, 0.12], [0.22, -0.46], [-0.22, -0.46]]) {
     loaf(m, [x, 0.44, z], [0.17, 0.4, 0.18], 0.82, WHITE, LAT, LON);              // rounded leg, top buried in the body
     ribbon(m, spline([[x, 0, z, 0.085, 0.085], [x, 0.045, z, 0.14, 0.14], [x, 0.15, z, 0.14, 0.14]], 4), 16, HOOF, [1, 0, 0]);   // hoof: short cylinder, softly rounded bottom edge
@@ -200,7 +206,7 @@ function buildUnicorn(Q, pal) {
   // ── horn: a plain straight gold cone rooted at the forehead, pointing
   // up-and-forward. It never follows the level palette; only the hair does.
   // Both golds have red > 1, which is what the Lit shader keys the gloss on.
-  cone(m, [0, 1.84, 0.53], [0, 2.35, 0.84], 0.13, R, [[1.35, 1.05, 0.4], [1.22, 0.86, 0.28]], 5);   // gold with darker gold rings
+  cone(m, [0, 1.84, 0.53], [0, 2.35, 0.84], 0.13, R, [hsv(hue + 0.16, 0.4, 1.2), hsv(hue + 0.16, 0.5, 1)], 5);   // gold with darker gold rings
 
   // One uninterrupted fin follows the crown; stripes only change its colour.
   const crest = spline([

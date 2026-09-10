@@ -4,7 +4,7 @@
 //
 // Flow. 0 gate: night sky with the rainbow, the title, "press any key"
 // (browsers refuse to play audio before a gesture). 4 select: the intro loop
-// plays and its notes flow under a pyramid of seven tracks, unlocked one at a
+// plays over a row of seven stages, unlocked one at a
 // time by clearing the previous one. 1 playing. 2 results, then back to 4.
 
 // Layout, from the sketch: a centred camera looking straight down a flat
@@ -24,9 +24,9 @@ const HUES = [0.07, 0.16, 0.36, 0.6];                 // bandHue 1..4 in sky.sha
 const LANE_COL = HUES.map((h) => hsv(h, 0.8, 1));
 const UNI = [-4.3, 0, -2.4, 0.85];                    // x, y, z, scale: on the ground, bottom-left, facing the track
 const TRACKS = 7, TRACK_H = [0, 0.07, 0.16, 0.36, 0.6, 0.72, 0.82];   // one track per rainbow colour
-const NAMES = ['RED', 'ORANGE', 'YELLOW', 'GREEN', 'BLUE', 'INDIGO', 'VIOLET'];
+const NAMES = 'RED RUSHDOWN,AMBER BEAT,GOLDEN GROOVE,EMERALD ECHO,BLUE BOOGIE,INDIGO DREAM,VIOLET VIBES'.split(',');
 // five hair colours from the colours level k has unlocked; repeats get a shade darker
-const hair = (k) => [0, 1, 2, 3, 4, 5, 6].map((i) => hsv(TRACK_H[i % (k + 1)], 0.7, 1 - 0.12 * ((i / (k + 1)) | 0)));
+const hair = (k) => TRACK_H.map((h, i) => hsv(TRACK_H[i % (k + 1)], 0.7, 1));
 
 // Camera for an aspect ratio: [eye height, eye z, cos pitch, sin pitch]. The
 // eye sits on the x = 0 line looking down -z, so the view matrix is written out
@@ -48,17 +48,17 @@ const hx = hud.getContext('2d');
 let state = 0;
 let ac, t0, songLen, bpm = 120, songSrc;
 let sel = 0, unlocked = +localStorage.rr_u || 1, won = 0;   // rr_ prefix: js13k games share an origin
-let introSrc, introT0 = 0, introLen = 1, introAt = 0, introChart = [];
+let introSrc, introT0 = 0;
 let chart = [], nextNote = 0;
-let score = 0, combo = 0, maxCombo = 0;
-let judge = '', judgeT = -9, judgeCol = '#fff', judgeK = 0, resT = 0;
+let score = 0, combo = 0, maxCombo = 0, milestone = 0, milestoneT = -9;
+let judge = '', judgeT = -9, judgeCol = '#fff', judgeK = 0;
 const counts = [0, 0, 0, 0];         // perfect great good miss
-const held = [0, 0, 0, 0];
+const held = [0, 0, 0, 0], flashes = [-9, -9, -9, -9];
 let leanX = 0, leanY = 0, hop = 0;   // unicorn pose targets
 const bursts = [];
 let VP = bmIdentity();   // last frame's view-projection
 
-const KEYS = { ArrowLeft: 0, KeyA: 0, ArrowDown: 1, KeyS: 1, ArrowUp: 2, KeyW: 2, ArrowRight: 3, KeyD: 3 };
+const KEYS = { ArrowLeft: 0, KeyA: 0, KeyJ: 0, ArrowDown: 1, KeyS: 1, KeyK: 1, ArrowUp: 2, KeyD: 2, KeyL: 2, ArrowRight: 3, KeyF: 3, Semicolon: 3 };
 const JUDGE = [[0.045, 'PERFECT', '#ff7ad9', 100], [0.09, 'GREAT', '#ffd45c', 70], [0.14, 'GOOD', '#7fe3a0', 40]];
 
 const songTime = () => (ac ? ac.currentTime - t0 : 0);
@@ -66,7 +66,9 @@ const songTime = () => (ac ? ac.currentTime - t0 : 0);
 function setJudge(k) {
   counts[k]++;
   if (k < 3) {
-    combo++; maxCombo = Math.max(maxCombo, combo);
+    combo++;
+    if (combo % 10 === 0) { milestone = combo / 10; milestoneT = songTime(); }
+    maxCombo = Math.max(maxCombo, combo);
     score += JUDGE[k][3] * (1 + Math.min(combo, 50) / 50);
     judge = JUDGE[k][1]; judgeCol = JUDGE[k][2];
   } else { combo = 0; judge = 'MISS'; judgeCol = '#8a8a9a'; }
@@ -88,8 +90,18 @@ function press(lane) {
     n.hit = 1;
     const k = dt < JUDGE[0][0] ? 0 : dt < JUDGE[1][0] ? 1 : 2;
     setJudge(k);
-    if (k < 2) bursts.push({ t, lane, big: combo % 10 === 0 });
-    if (k < 3 && combo % 10 === 0) for (let i = 0; i < 4; i++) i !== lane && bursts.push({ t, lane: i, big: 1 });   // every 10th: all lanes erupt
+    flashes[lane] = t;
+    if (k < 2) for (const tone of [1, 0.4]) {
+      const o = ac.createOscillator(), gain = ac.createGain(), at = ac.currentTime;
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(420 * tone, at);
+      o.frequency.exponentialRampToValueAtTime(65 * tone, at + 0.025);
+      gain.gain.setValueAtTime(k ? 0.18 : 0.28, at);
+      gain.gain.exponentialRampToValueAtTime(0.001, at + 0.12);
+      o.connect(gain); gain.connect(ac.destination); o.start(at); o.stop(at + 0.13);
+    }
+    if (k < 2) bursts.push({ t, lane, big: k === 0 });
+    if (combo % 10 === 0) for (let i = 0; i < 4; i++) i !== lane && bursts.push({ t, lane: i, big: 1 });   // every 10th: all lanes erupt
     return;
   }
 }
@@ -108,35 +120,29 @@ function play(g, loop, at) {
 // the first gesture: audio is allowed from here, so the intro loop starts now
 function intro() {
   ac = ac || new AudioContext();
-  [introSrc, bpm, introLen] = play(INTRO, 1, introT0 = ac.currentTime);
-  introChart = makeChart(INTRO, bpm);
-  introAt = performance.now() / 1000;
+  [introSrc, bpm] = play(INTRO, 1, introT0 = ac.currentTime);
+  bursts.length = 0; held.fill(0);
   state = 4;
 }
 function toSelect() { if (songSrc) songSrc.stop(); intro(); }
 function start() {
   introSrc.stop();
+  if (songSrc) songSrc.stop();
   const g = sel === TRACKS ? BONUS : (SONGS[sel] || SONGS[0]);   // sel 7 = the secret bonus track
   [songSrc, bpm, songLen] = play(g, 0, t0 = ac.currentTime + 2.2);
   chart = makeChart(g, bpm);
-  nextNote = 0; score = 0; combo = 0; maxCombo = 0; won = 0; judge = ''; counts.fill(0); bursts.length = 0;
+  nextNote = 0; score = 0; combo = 0; maxCombo = 0; won = 0; judge = ''; milestoneT = -9; counts.fill(0); bursts.length = 0; flashes.fill(-9);
   state = 1;
 }
 // anything that isn't a lane press: advance whichever screen is showing
 function go(k) {
   if (state === 0) intro();
   else if (state === 4) {
-    // arrows climb the pyramid (see P in drawHud); only Enter, Space or a tap starts
-    const U = [4, 4, 5, 5, 6, 6, 6], D = [0, 1, 2, 3, 1, 2, 4];
-    if (k === 0) sel = Math.max(0, sel - 1);
-    else if (k === 3) sel = Math.min(unlocked - 1, sel + 1);
-    else if (k === 2) { if (U[sel] < unlocked) sel = U[sel]; }
-    else if (k === 1) sel = D[sel];
+    if (typeof k === 'number') sel = clamp(sel + (k < 2 ? -1 : 1), 0, unlocked - 1);
     else if (k === 'Enter' || k === ' ' || k === '') start();
   } else if (state === 2) {
-    if (won === 2 && (k === 'Escape' || k === 1)) toSelect();   // finale: down / escape chooses a level
-    else if (won === 2) { sel = TRACKS; start(); }                                       // finale: dance forever
-    else toSelect();
+    if (k === 'Escape' || k === 1) toSelect();
+    else if (k === 'Enter' || k === '') { sel = won === 2 ? TRACKS : Math.min(sel + 1, unlocked - 1); start(); }
   } else if (state === 5) toSelect();
 }
 
@@ -145,10 +151,18 @@ addEventListener('keydown', (e) => {
   if (state === 1) {
     if (e.code in KEYS) { held[KEYS[e.code]] = 1; press(KEYS[e.code]); }
     else if (e.key === 'Escape') toSelect();
-  } else go(e.code in KEYS ? KEYS[e.code] : e.key || e.code);   // lanes 0..3 climb the pyramid, anything else advances
+  } else go(e.code in KEYS ? KEYS[e.code] : e.key || e.code);   // lane keys navigate the stage row
 });
 addEventListener('keyup', (e) => { if (e.code in KEYS) held[KEYS[e.code]] = 0; });
-addEventListener('pointerup', () => { if (state !== 1) go(''); });   // pointerup: touch activation arrives on release
+const stageLayout = () => [Math.min(innerWidth / 8, innerHeight / 5, 150), innerHeight * 0.32];
+addEventListener('pointerup', (e) => {
+  if (state === 4) {
+    const [g, y] = stageLayout(), i = Math.round((e.clientX - innerWidth / 2) / g + 3);
+    if (i >= 0 && i < unlocked && Math.abs(e.clientX - innerWidth / 2 - (i - 3) * g) < g * 0.42 && Math.abs(e.clientY - y) < g * 0.42) { sel = i; start(); }
+  } else if (state === 2) {
+    if (Math.abs(e.clientX - innerWidth / 2) < 220 && e.clientY > innerHeight * 0.7 && e.clientY < innerHeight * 0.9) go(e.clientY < innerHeight * 0.81 ? 'Enter' : 1);
+  } else if (state !== 1) go('');
+});   // pointerup: touch activation arrives on release
 
 // ── HUD (2D canvas overlay — text is far cheaper here than in a glyph atlas)
 function drawHud(t, now) {
@@ -157,7 +171,8 @@ function drawHud(t, now) {
   hx.setTransform(d, 0, 0, d, 0, 0);
   hx.clearRect(0, 0, W, H);
   hx.textAlign = 'center'; hx.lineJoin = 'round';
-  const font = (size) => hx.font = `900 ${size}px system-ui,sans-serif`;
+  hx.shadowColor = '#210d38'; hx.shadowOffsetY = state ? 0 : 5;
+  const font = (size) => hx.font = `${'italic 900'} ${size}px system-ui,sans-serif`;
   const txt = (s, x, y, size, fill, stroke) => {
     font(size);
     hx.lineWidth = size / 7; hx.strokeStyle = stroke || '#fff'; hx.strokeText(s, x, y);
@@ -166,54 +181,73 @@ function drawHud(t, now) {
   // a word with one rainbow colour per letter (hues cycle past seven)
   const rb = (word, y, size) => {
     font(size);
-    let x = W / 2 - hx.measureText(word).width / 2;
+    let x = W / 2 - [...word].reduce((w, ch) => w + hx.measureText(ch).width, 0) / 2;
     hx.textAlign = 'left';
-    [...word].forEach((ch, i) => { txt(ch, x, y, size, css(hsv(TRACK_H[i % 7], 0.75, 1)), '#fff'); x += hx.measureText(ch).width; });
+    [...word].forEach((ch, i) => { txt(ch, x, y, size, css(hsv(TRACK_H[i % 7], 0.65, 1)), state ? '#fff' : '#34104d'); x += hx.measureText(ch).width; });
     hx.textAlign = 'center';
   };
   const cx = W * 0.86;   // judgments live in the open space right of the track
   if (state === 0) {
     const big = Math.min(W / 7, 150);
-    txt('RHYTHM', W / 2, H * 0.3, big * 0.62, '#fff', '#c66ad0');
-    rb('RAINBOW', H * 0.3 + big * 0.95, big);
+    txt('RHYTHM', W / 2, H * 0.3, big * 0.38, '#ffe9ff', '#34104d');
+    rb('RAINBOW', H * 0.3 + big * 0.86, big);
     hx.globalAlpha = 0.6 + 0.4 * Math.sin(now * 3);
-    txt('PRESS ANY KEY', W / 2, H * 0.85, 32, '#fff', '#fff');   // under the unicorn, above the receptors; stroke = fill, so the pulse never shows an outline
+    txt('PRESS ANY KEY', W / 2, H * 0.85, 20, '#fff', '#34104d');   // under the unicorn, above the receptors; stroke = fill, so the pulse never shows an outline
   } else if (state === 4) {
-    if (unlocked < TRACKS) txt('UNLOCK THE RAINBOW', W / 2, H * 0.13, 44, '#ff7ad9');
-    else rb('RAINBOW UNLOCKED', H * 0.13, 44);
-    // a 4-2-1 pyramid: climb it, the top is the last track
-    // the top square hangs just under the heading, so the pyramid fills the sky at any aspect
-    const s = Math.min(W / 16, H / 11, 70), g = s * 1.5, y0 = H * 0.22 + 2 * g, P = [[-1.5, 0], [-0.5, 0], [0.5, 0], [1.5, 0], [-0.5, 1], [0.5, 1], [0, 2]];
+    const f = Math.min(W / 35, 22);
+    txt('SELECT A STAGE', W / 2, H * 0.14, Math.min(W / 18, 44), '#ffe9ff', '#34104d');
+    txt('Press Enter to play', W / 2, H * 0.19, f, '#bba9d2', '#34104d');
+    const [g, y0] = stageLayout(), s = g * 0.84;
     for (let i = 0; i < TRACKS; i++) {
-      const on = i < unlocked, r = s * (i === sel ? 0.62 : 0.5), x = W / 2 + P[i][0] * g, y = y0 - P[i][1] * g;
-      hx.globalAlpha = on ? 1 : 0.35;
-      hx.fillStyle = css(hsv(TRACK_H[i], 0.8, on ? 1 : 0.6));
-      hx.beginPath(); hx.roundRect(x - r, y - r, 2 * r, 2 * r, r * 0.3); hx.fill();
-      if (i === sel) { hx.lineWidth = 5; hx.strokeStyle = '#fff'; hx.stroke(); }
-      if (!on) {   // padlock: body plus shackle
-        hx.globalAlpha = 0.9; hx.fillStyle = hx.strokeStyle = '#fff'; hx.lineWidth = r * 0.14;
-        hx.beginPath(); hx.roundRect(x - r * 0.32, y - r * 0.02, r * 0.64, r * 0.5, r * 0.08); hx.fill();
-        hx.beginPath(); hx.arc(x, y - r * 0.04, r * 0.24, 3.1416, 0); hx.stroke();
+      const on = i < unlocked, r = s / 2, x = W / 2 + (i - 3) * g, y = y0;
+      const color = css(hsv(TRACK_H[i], 0.65, 1));
+      hx.fillStyle = '#34104d'; hx.strokeStyle = color;
+      hx.lineWidth = i === sel ? 5 : 2;
+      hx.shadowColor = color; hx.shadowBlur = i === sel ? 24 : 0;
+      hx.beginPath(); hx.roundRect(x - r, y - r, 2 * r, 2 * r, r * 0.3); hx.fill(); hx.stroke();
+      hx.shadowBlur = 0;
+      if (on) txt(i + 1, x, y + r * 0.23, r * 0.65, '#fff', '#34104d');
+      else {
+        hx.strokeStyle = '#7040a0'; hx.lineWidth = 3;
+        hx.beginPath(); hx.roundRect(x - r * 0.25, y - r * 0.05, r * 0.5, r * 0.35, 3); hx.stroke();
+        hx.strokeRect(x, y + r * 0.1, 0, r * 0.1);
+        hx.beginPath(); hx.arc(x, y - r * 0.05, r * 0.15, 3.1416, 0); hx.stroke();
       }
     }
-    hx.globalAlpha = 1;
-    txt(NAMES[sel], W / 2, y0 + s * 1.2, 32, '#fff', '#c66ad0');
-    txt('◀ ▶ ▲ ▼  climb      ENTER  dance', W / 2, H * 0.85, 24, '#fff', '#7040a0');
+    txt(NAMES[sel], W / 2, y0 + s * 1.1, f * 2.2, css(hsv(TRACK_H[sel], 0.65, 1)), '#34104d');
+    txt('CONTROLS', W / 2, H * 0.86, f, '#bba9d2', '#34104d');
+    const keySize = Math.min(W / 24, H / 24, 44), ky = H * 0.93;
+    ['←↓↑→', 'ASDF', 'JKL;'].forEach((keys, group) => {
+      const center = W / 2 + (group - 1) * keySize * 6;
+      [...keys].forEach((key, i) => {
+        const x = center + (i - 1.5) * keySize * 1.1;
+        hx.strokeStyle = '#bba9d2'; hx.lineWidth = 2;
+        hx.strokeRect(x - keySize / 2, ky - keySize * 0.7, keySize, keySize);
+        txt(key, x, ky, keySize * 0.6, '#fff', '#34104d');
+      });
+      if (group < 2) txt('OR', center + keySize * 3, ky, keySize * 0.4, '#bba9d2', '#34104d');
+    });
   } else if (state === 1) {
+    const cheer = clamp(1 - (t - milestoneT), 0, 1);
+    if (cheer) {
+      hx.save(); hx.translate(W / 2, H * 0.32);
+      hx.rotate(-0.12 + Math.sin((t - milestoneT) * 45) * cheer * 0.025);
+      hx.globalAlpha = cheer * 0.65;
+      txt('AWESOME,AMAZING,ON FIRE,UNSTOPPABLE,LEGENDARY,EPIC'.split(',')[(milestone - 1) % 6], 0, 0, Math.min(W / 12, 110), '#ffd45c', '#34104d');
+      hx.restore();
+    }
     if (combo > 1) {
       // centred over the vanishing point, growing with the combo, popping on each hit
-      const pop = 1 + 0.4 * Math.max(0, Math.min(1, 1 - (t - judgeT) / 0.15));
-      txt(combo, W / 2, H * 0.4, (54 + Math.min(combo, 90)) * pop, '#ffd45c', '#ff7ad9');
-      txt('COMBO', W / 2, H * 0.4 + 30, 26, '#fff', '#ff7ad9');
+      txt(combo, W / 2, H * 0.4, 72, '#ffe9ff', '#34104d');
+      txt('COMBO', W / 2, H * 0.4 + 32, 20, '#bba9d2', '#34104d');
     }
     const a = clamp(1 - (t - judgeT - 0.45) / 0.3, 0, 1);
     if (judge && a > 0) {
       // bigger and poppier the better the hit; MISS is small and grey
-      const sz = [78, 54, 40, 28][judgeK], jp = 1 + [0.7, 0.4, 0.25, 0][judgeK] * Math.max(0, Math.min(1, 1 - (t - judgeT) / 0.12));
-      hx.globalAlpha = a; txt(judge, cx, H * 0.58, sz * jp, judgeCol, '#fff'); hx.globalAlpha = 1;
+      hx.globalAlpha = a; txt(judge, cx, H * 0.58, [78, 54, 40, 28][judgeK], judgeCol, '#fff'); hx.globalAlpha = 1;
     }
     hx.textAlign = 'right'; txt(Math.round(score), W - 24, 52, 36, '#fff', '#c66ad0');
-    if (t < 0) { hx.textAlign = 'center'; txt('READY', W / 2, H * 0.5, 56, '#fff', '#ff7ad9'); }
+    if (t < 0) { hx.textAlign = 'center'; txt(NAMES[sel] || 'ENCORE', W / 2, H * 0.24, Math.min(W / 20, 60), css(hsv(TRACK_H[Math.min(sel, 6)], 0.65, 1)), '#34104d'); txt('GET READY', W / 2, H * 0.34, 32, '#fff', '#34104d'); }
   } else if (state === 5) {
     rb('RHYTHM RAINBOW', H * 0.24, Math.min(W / 9, 90));
     txt('you danced the whole rainbow', W / 2, H * 0.44, 28, '#fff', '#7040a0');
@@ -223,18 +257,15 @@ function drawHud(t, now) {
     txt('press any key', W / 2, H * 0.82, 26, '#fff', '#fff');
   } else {
     if (won === 2) { txt('YOU UNLOCKED', W / 2, H * 0.15, 40, '#fff', '#c66ad0'); rb('THE RAINBOW', H * 0.15 + 64, 64); }
-    else txt('SONG COMPLETE', W / 2, H * 0.24, 60, '#ff7ad9');
+    else txt('STAGE COMPLETE', W / 2, H * 0.24, Math.min(W / 18, 60), '#ffe9ff', '#34104d');
     txt(`SCORE  ${Math.round(score)}`, W / 2, H * 0.24 + 70, 40, '#fff', '#c66ad0');
     txt(`MAX COMBO  ${maxCombo}`, W / 2, H * 0.24 + 120, 32, '#fff', '#c66ad0');
     txt(`PERFECT ${counts[0]}   GREAT ${counts[1]}   GOOD ${counts[2]}   MISS ${counts[3]}`, W / 2, H * 0.24 + 165, 24, '#fff', '#7040a0');
     if (won === 1) {
-      const pop = Math.min(1, (now - resT) * 2);
-      txt(`${NAMES[sel + 1]} UNLOCKED`, W / 2, H * 0.24 + 240, (34 + 28 * pop) * (1 + 0.3 * (1 - pop)), css(hsv(TRACK_H[sel + 1], 0.85, 1)), '#fff');
+      txt(`${NAMES[sel + 1]} UNLOCKED`, W / 2, H * 0.24 + 240, 44, css(hsv(TRACK_H[sel + 1], 0.85, 1)), '#fff');
     }
-    if (won === 2) {
-      txt('ENTER · DANCE FOREVER', W / 2, H * 0.76, 30, '#fff', '#c66ad0');
-      txt('↓ · CHOOSE A LEVEL', W / 2, H * 0.76 + 40, 26, '#fff', '#7040a0');
-    } else txt('PRESS ANY KEY', W / 2, H * 0.8, 32, '#fff', '#c66ad0');
+    txt(won === 2 ? 'ENTER · ENCORE' : sel + 1 < unlocked ? 'ENTER · NEXT STAGE' : 'ENTER · RETRY', W / 2, H * 0.77, 30, '#fff', '#34104d');
+    txt('↓ · STAGE SELECT', W / 2, H * 0.87, 24, '#bba9d2', '#34104d');
   }
   hx.globalAlpha = 1;
 }
@@ -279,7 +310,7 @@ bmInit(cv, [0, 0, 0, 1]).then(() => {
         nextNote++;
       }
       if (t > songLen + 1.5) {
-        state = 2; resT = now;
+        state = 2;
         // clearing a track (half its notes hit) unlocks the next colour
         const clear = chart.length - counts[3] >= chart.length / 2;
         if (clear && sel + 1 < TRACKS && unlocked === sel + 1) { won = 1; localStorage.rr_u = unlocked = sel + 2; }
@@ -297,12 +328,11 @@ bmInit(cv, [0, 0, 0, 1]).then(() => {
     // full rainbow on the title). The track sits dim behind the title and menu
     // and only reaches full brightness in play.
     const kk = state ? Math.min(sel + (state === 2 ? won : 0), 6) : 6;   // a win paints the world with the newly unlocked colour
-    if (kk !== hairK) { hairK = kk; bmAttr(pUni, 2, buildUnicorn(3, hair(kk)).col); }
-    const ti = ac ? (ac.currentTime - introT0) % introLen : 0;
+    if (kk !== hairK) { hairK = kk; bmAttr(pUni, 2, buildUnicorn(3, hair(kk), TRACK_H[kk]).col); }
     const beats = (state === 1 ? Math.max(t, 0) : ac ? ac.currentTime - introT0 : now) * bpm / 60;
-    const bright = playing ? 1 : state ? 0.3 + clamp(now - introAt, 0, 1) * 0.4 : 0.3;
-    uSky.set([0, H, E, T * asp, 1, 0, 0, T, 0, c, -s, now, 0, -s, -c, beats,
-      won === 2 ? 1 : Math.min(combo, 30) / 30, kk, bright, SCROLL * 60 / bpm]);
+    const bright = playing ? 1 : 0.3;
+    uSky.set([0, H, E, T * asp, 1, 0, 0, T, 0, c, -s, now, 0, -s, -c, state === 4 ? -2 : state ? beats : -1,
+      unlocked, kk, bright, SCROLL * 60 / bpm]);
     bmUniforms(pSky, uSky); bmDraw(pSky);
 
     // ── unicorn: beat bounce + lane-driven lean, all one pose function. It faces
@@ -311,7 +341,7 @@ bmInit(cv, [0, 0, 0, 1]).then(() => {
     curLX += (leanX - curLX) * Math.min(1, dt * 14); leanX *= Math.pow(0.02, dt);
     curLY += (leanY - curLY) * Math.min(1, dt * 14); leanY *= Math.pow(0.02, dt);
     curHop += (hop - curHop) * Math.min(1, dt * 16); hop *= Math.pow(0.005, dt);
-    const sq = 1 - bounce, S = UNI[3], party = (won === 2 && state === 2) || state === 5;
+    const sq = 1 - bounce, S = UNI[3] * (state ? 1 : 1.1), party = (won === 2 && state === 2) || state === 5;
     let M;
     if (party) {
       // ending: front and centre on the track, facing the camera, dancing side to side to the beat
@@ -322,10 +352,10 @@ bmInit(cv, [0, 0, 0, 1]).then(() => {
       M = bmMul(M, bmScale(-S * 1.15, S * 1.15, S * 1.15));
     } else {
       // side view: bottom-left during play and menus; centre stage on the title
-      M = bmTrans((state ? UNI[0] : 0) + curLX * 0.2, UNI[1] + bounce * 0.08 + curHop * 0.25, state ? UNI[2] : -3.4);
+      M = bmTrans((playing ? UNI[0] : 0) + curLX * 0.2, UNI[1] + bounce * 0.08 + curHop * 0.25 - (state === 4 ? 0.25 : 0), state ? UNI[2] : -3.4);
       M = bmMul(M, bmRotX(curLX * 0.28));
       M = bmMul(M, bmRotZ(curLY * 0.22));
-      M = bmMul(M, bmRotY(1.5708 + curLX * 0.2 - (state ? 0 : 0.65)));   // title: turned toward the camera for a 3/4 view
+      M = bmMul(M, bmRotY(1.5708 + curLX * 0.2 - (playing ? 0 : 0.65)));   // title: turned toward the camera for a 3/4 view
       M = bmMul(M, bmScale(-S * (1 + sq * 0.04), S * (1 - sq * 0.08), S * (1 + sq * 0.04)));
     }
     uLit.set([...VP, ...M, 0.4, 1, 0.6, 0, ...hsv(TRACK_H[kk], 0.55, 0.42)]);   // vp, model, light dir (padded), fog colour
@@ -333,19 +363,17 @@ bmInit(cv, [0, 0, 0, 1]).then(() => {
 
     // ── charms: receptors, notes (far to near, for blending), particles
     ni = 0;
-    for (let i = 0; i < LANES; i++) inst(laneX(i), 0.02, 0, 5 + i + (held[i] ? 0.5 : 0), [1, 1, 1], (held[i] ? 0.95 : 0.55) * bright, 0.34);
+    for (let i = 0; i < LANES; i++) {
+      const flash = clamp(1 - (t - flashes[i]) / 0.22, 0, 1);
+      if (flash) {
+        inst(laneX(i), 0.3 + (1 - flash) * 0.7, 0, 4, [1, 0.8, 0.3], flash, flash * 0.6);
+      }
+      inst(laneX(i), 0.025, 0, 5 + i + (held[i] || flash ? 0.5 : 0), [1, 1, 1], (held[i] || flash ? 1 : 0.55) * bright, 0.34 + flash * 0.1);
+    }
     if (state === 1) {
       let j = nextNote;
       while (j < chart.length && -(chart[j].t - t) * SCROLL >= FAR) j++;
       for (let i = j - 1; i >= nextNote; i--) if (!chart[i].hit) tile(chart[i], -(chart[i].t - t) * SCROLL, 1);
-    } else if (state > 2 && state < 5) {
-      // attract mode: the intro's own chart, wrapped around the loop, never judged
-      for (const n of introChart) {
-        let d = n.t - ti;
-        if (d < -0.3) d += introLen;
-        const z = -d * SCROLL;
-        if (z >= FAR) tile(n, z, bright);
-      }
     }
     // finale: rainbow shells burst up in the sky between the track and the arc,
     // spread across it, big and frequent. F = [x, y, z, power] burst centre.
@@ -367,7 +395,7 @@ bmInit(cv, [0, 0, 0, 1]).then(() => {
     }
     uCh.set(VP, 0);
     [iPos, iCol, iScl].forEach((a, i) => bmDevice.queue.writeBuffer(pCharm.b[i + 1], 0, a, 0, i < 2 ? ni * 4 : ni));
-    bmUniforms(pCharm, uCh); bmDraw(pCharm, ni);
+    bmUniforms(pCharm, uCh); if (state !== 4) bmDraw(pCharm, ni);
 
     drawHud(t, now);
   });
