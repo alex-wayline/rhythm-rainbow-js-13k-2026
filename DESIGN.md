@@ -14,10 +14,25 @@ Alex wants a distinctive mechanic: sustained combos charge a visible power meter
 Consider a meaningful charge milestone at 20 or 30 consecutive notes. The action
 that spends power is still undecided; do not treat a particular ability as approved.
 
-Candidate: Rainbow Remix. Spend power to temporarily turn the incoming chart into
-an optional harder bonus pattern with extra score opportunities and a burst of
-rainbow colour. Timing still matters; power does not automatically hit notes.
-Prototype and compare with simpler alternatives before committing to the mechanic.
+### Candidate: powered lane lasers (Alex's idea)
+
+- Build charge through combos, then press **Space** to activate it.
+- Give the lane arrows/receptors a flaming or energized appearance so the active
+  power is clearly visible.
+- While powered up, a successful hit fires a laser up that lane, destroying
+  incoming notes in the same lane. Perfect hits should be especially rewarding.
+- This is a proposed mechanic, not yet approved for implementation.
+
+Decisions for a prototype: charge threshold, active duration, whether only Perfect
+hits fire a beam or Perfect hits strengthen it, beam range, and how destroyed
+notes contribute to score and combo.
+
+Suggested balance: destroyed notes grant bonus points but do not recharge the
+meter or count as timed Perfect hits. Keep the effect bounded so it does not clear
+an entire song or sustain itself indefinitely. This is a suggestion, not a settled rule.
+
+Earlier alternative: Rainbow Remix, a temporary harder bonus pattern for extra
+points. Keep it as an alternative rather than combining both abilities by default.
 
 ## Combo celebrations
 
