@@ -59,3 +59,13 @@ Stage selection now includes a larger heading, subtle coloured star glints, and
 an occasional shooting star. Runtime tests pass. The packed prototype is
 13,697 bytes, 385 bytes above the 13,312-byte submission limit. Optimize size
 before submission while preserving the approved visuals.
+
+## Rainbow power meter — visual prototype
+
+On the right, opposite the unicorn and below the hit-feedback text: a dark rounded housing with a continuous glossy
+rainbow gradient, faint empty fill, an uninterrupted gradient without tick marks, and a blue
+full-charge glow. Fills from combo / 30 and resets on a miss. Full charge shows a gently blinking “Press Space to activate” prompt underneath.
+The prompt is visual only for now; activation is not implemented.
+
+References: Guitar Hero Star Power meter and Street Fighter 6 Drive Gauge.
+Current packed prototype: 14,002 bytes (690 bytes above submission limit).

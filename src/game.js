@@ -251,6 +251,29 @@ function drawHud(t, now) {
       if (group < 2) txt('OR', center + keySize * 3, ky, keySize * 0.4, '#bba9d2', '#34104d');
     });
   } else if (state === 1) {
+    // Visual charge prototype: thirty consecutive hits fill the rainbow reservoir.
+    const power = Math.min(combo / 30, 1), barW = Math.min(W * 0.22, 340), barH = 22;
+    const barX = W * 0.86 - barW / 2, barY = H * 0.7;
+    hx.save();
+    hx.shadowColor = '#7cdeff'; hx.shadowBlur = power === 1 ? 16 + Math.sin(now * 2.4) * 4 : 4;
+    hx.fillStyle = '#130e28'; hx.strokeStyle = power === 1 ? '#b9f3ff' : '#73608e'; hx.lineWidth = 2;
+    hx.beginPath(); hx.roundRect(barX - 5, barY - 5, barW + 10, barH + 10, 12); hx.fill(); hx.stroke();
+    hx.shadowBlur = 0;
+    hx.beginPath(); hx.roundRect(barX, barY, barW, barH, 8); hx.clip();
+    const spectrum = hx.createLinearGradient(barX, 0, barX + barW, 0);
+    TRACK_H.forEach((h, i) => spectrum.addColorStop(i / 6, css(hsv(h, 0.7, 1))));
+    hx.fillStyle = spectrum; hx.globalAlpha = 0.12; hx.fillRect(barX, barY, barW, barH);
+    hx.globalAlpha = 1; hx.fillRect(barX, barY, barW * power, barH);
+    const gloss = hx.createLinearGradient(0, barY, 0, barY + barH);
+    gloss.addColorStop(0, '#ffffff80'); gloss.addColorStop(0.5, '#ffffff00'); gloss.addColorStop(1, '#00000030');
+    hx.fillStyle = gloss; hx.fillRect(barX, barY, barW * power, barH);
+    hx.restore();
+    txt(power === 1 ? 'FULL CHARGE' : 'RAINBOW POWER', W * 0.86, barY - 16, 16, power === 1 ? '#b9f3ff' : '#cbb8df', '#130e28');
+    if (power === 1) {
+      hx.globalAlpha = 0.65 + Math.sin(now * 4) * 0.35;
+      txt('Press Space to activate', W * 0.86, barY + barH + 26, Math.min(16, barW / 13), '#b9f3ff', '#130e28');
+      hx.globalAlpha = 1;
+    }
     const cheer = clamp(1 - (t - milestoneT), 0, 1);
     if (cheer) {
       hx.save(); hx.translate(W / 2, H * 0.32);
@@ -261,8 +284,8 @@ function drawHud(t, now) {
     }
     if (combo > 1) {
       // centred over the vanishing point, growing with the combo, popping on each hit
-      txt(combo, W / 2, H * 0.4, 72, '#ffe9ff', '#34104d');
-      txt('COMBO', W / 2, H * 0.4 + 32, 20, '#bba9d2', '#34104d');
+      txt(combo, W / 2, H * 0.35, 72, '#ffe9ff', '#34104d');
+      txt('COMBO', W / 2, H * 0.35 + 32, 20, '#bba9d2', '#34104d');
     }
     const a = clamp(1 - (t - judgeT - 0.45) / 0.3, 0, 1);
     if (judge && a > 0) {
