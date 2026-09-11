@@ -60,3 +60,10 @@ Shader-inferred WebGPU pipeline layouts save a further 20 bytes without visual
 changes. Current ZIP: 14,031 bytes; remaining overage: 719 bytes. Gameplay tests
 pass and browser rendering was checked. Most unused renderer support was already
 removed; investigate song-pattern deduplication next.
+
+## Simplified ending checkpoint
+
+Custom sky-firework trajectories were replaced with lighter confetti using the
+existing hit-particle system. The full rainbow, dancing unicorn, completion
+message, credits and encore remain. This saves 129 compressed bytes: the ZIP
+is now 13,902 bytes, 590 bytes over the submission limit.

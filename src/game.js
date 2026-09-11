@@ -439,22 +439,21 @@ bmInit(cv, [0, 0, 0, 1]).then(() => {
       while (j < chart.length && -(chart[j].t - t) * SCROLL >= FAR) j++;
       for (let i = j - 1; i >= nextNote; i--) if (!chart[i].hit) tile(chart[i], -(chart[i].t - t) * SCROLL, 1);
     }
-    // finale: rainbow shells burst up in the sky between the track and the arc,
-    // spread across it, big and frequent. F = [x, y, z, power] burst centre.
-    if ((state === 2 || state === 5) && won && bursts.length < 30 && Math.random() < (won === 2 ? 0.6 : 0.15))
-      bursts.push({ t, lane: Math.random() * 4 | 0, big: 1, F: won === 2 ? [(Math.random() - 0.5) * 12, 2.4 + Math.random() * 3, -4 - Math.random() * 16, 1.4 + Math.random()] : 0, c: won === 1 ? hsv(TRACK_H[sel + 1], 0.8, 1) : 0 });
+    // Ending confetti reuses the regular hit particles.
+    if ((state === 2 || state === 5) && won && bursts.length < 12 && Math.random() < 0.15)
+      bursts.push({ t, lane: Math.random() * 4 | 0, big: 1 });
     for (let b = bursts.length - 1; b >= 0; b--) {
-      const B = bursts[b], F = B.F, life = F ? 1.3 : B.big ? 0.9 : 0.55, age = t - B.t;
+      const B = bursts[b], life = B.big ? 0.9 : 0.55, age = t - B.t;
       if (age > life) { bursts.splice(b, 1); continue; }
-      const N = F ? 46 : B.big ? 36 : 16, k = age / life, P = F ? F[3] : 1;
+      const N = B.big ? 36 : 16, k = age / life;
       for (let p = 0; p < N; p++) {
         const h = Math.sin(p * 12.9898 + B.t * 78.233) * 43758.5453, r = h - Math.floor(h);
-        const ang = p / N * 6.283 + r, sp = (0.9 + r * 1.6) * (B.big ? 1.6 : 1) * P;
-        const x = (F ? F[0] : laneX(B.lane)) + Math.cos(ang) * sp * age;
-        const y = (F ? F[1] : 0.15) + Math.sin(ang) * sp * age * (F ? 1 : 0.7) + (F ? 0 : 2.2) * age - (F ? 2.2 : 4) * age * age;
-        const z = (F ? F[2] : 0.1) + (F ? Math.cos(ang * 1.7 + r) * sp * age * 0.6 : r * 0.3);
-        const c = B.c || ((B.big || F) && p % 3 ? LANE_COL[(B.lane + p) % 4] : LANE_COL[B.lane]);
-        inst(x, y, z, 4, c, 1 - k, (F ? 0.16 : 0.05) * (1 - k) + 0.02);
+        const ang = p / N * 6.283 + r, sp = (0.9 + r * 1.6) * (B.big ? 1.6 : 1);
+        const x = laneX(B.lane) + Math.cos(ang) * sp * age;
+        const y = 0.15 + Math.sin(ang) * sp * age * 0.7 + 2.2 * age - 4 * age * age;
+        const z = 0.1 + r * 0.3;
+        const c = B.big && p % 3 ? LANE_COL[(B.lane + p) % 4] : LANE_COL[B.lane];
+        inst(x, y, z, 4, c, 1 - k, 0.05 * (1 - k) + 0.02);
       }
     }
     uCh.set(VP, 0);

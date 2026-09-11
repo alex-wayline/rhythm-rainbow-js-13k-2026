@@ -104,3 +104,10 @@ Stage 8 encore music now plays during the intro/menu. Extra menu coloured stars
 and shooting star, activation expanding ring, and meter gloss have been removed.
 The original starfield, rainbow gradient, activation sound/text, and all eight
 stage songs remain. Packed size: 14,051 bytes; 739 bytes remain to save.
+
+## Simplified ending checkpoint
+
+Custom sky-firework trajectories were replaced with lighter confetti using the
+existing hit-particle system. The full rainbow, dancing unicorn, completion
+message, credits and encore remain. This saves 129 compressed bytes: the ZIP
+is now 13,902 bytes, 590 bytes over the submission limit.
