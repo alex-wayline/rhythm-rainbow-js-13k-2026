@@ -222,10 +222,7 @@ function drawHud(t, now) {
     for (let i = 0; i < TRACKS; i++) {
       const on = i < unlocked, r = s / 2, x = W / 2 + (i - 3) * g, y = y0;
       const color = css(hsv(TRACK_H[i], 0.65, 1));
-      const enamel = hx.createLinearGradient(x, y - r, x, y + r);
-      enamel.addColorStop(0, css(hsv(TRACK_H[i], 0.5, i === sel ? 0.55 : 0.28)));
-      enamel.addColorStop(1, '#180d30');
-      hx.fillStyle = enamel; hx.strokeStyle = color;
+      hx.fillStyle = '#34104d'; hx.strokeStyle = color;
       hx.lineWidth = i === sel ? 5 : 2;
       hx.shadowColor = color; hx.shadowBlur = i === sel ? 24 : 0;
       hx.beginPath(); hx.roundRect(x - r, y - r, 2 * r, 2 * r, r * 0.3); hx.fill(); hx.stroke();
@@ -266,24 +263,18 @@ function drawHud(t, now) {
     hx.fillStyle = spectrum; hx.globalAlpha = 0.12; hx.fillRect(barX, barY, barW, barH);
     hx.globalAlpha = 1; hx.fillRect(barX, barY, barW * power, barH);
     hx.restore();
-    txt(powered() ? 'RAINBOW RUSH' : power === 1 ? 'FULL CHARGE' : 'RAINBOW POWER', W * 0.86, barY - 16, 16, power === 1 ? '#b9f3ff' : '#cbb8df', '#130e28');
+    txt('RAINBOW POWER', W * 0.86, barY - 16, 16, power === 1 ? '#b9f3ff' : '#cbb8df', '#130e28');
     if (power === 1 && !powered()) {
       hx.globalAlpha = 0.65 + Math.sin(now * 4) * 0.35;
       txt('Press Space to activate', W * 0.86, barY + barH + 26, Math.min(16, barW / 13), '#b9f3ff', '#130e28');
       hx.globalAlpha = 1;
     }
-    const ignition = powered() ? clamp(1 - (t - powerEnd + 5) / 0.7, 0, 1) : 0;
-    if (ignition) {
-      hx.save(); hx.globalAlpha = ignition * 0.65;
-      txt('RAINBOW RUSH', W / 2, H * 0.23, Math.min(W / 22, 52), '#b9f3ff', '#34104d');
-      hx.restore();
-    }
     const cheer = clamp(1 - (t - milestoneT), 0, 1);
     if (cheer) {
       hx.save(); hx.translate(W / 2, H * 0.32);
-      hx.rotate(-0.12 + Math.sin((t - milestoneT) * 45) * cheer * 0.025);
+      hx.rotate(-0.12);
       hx.globalAlpha = cheer * 0.65;
-      txt('AWESOME,AMAZING,ON FIRE,UNSTOPPABLE,LEGENDARY,EPIC'.split(',')[(milestone - 1) % 6], 0, 0, Math.min(W / 12, 110), '#ffd45c', '#34104d');
+      txt('AWESOME,AMAZING,EPIC'.split(',')[(milestone - 1) % 3], 0, 0, Math.min(W / 12, 110), '#ffd45c', '#34104d');
       hx.restore();
     }
     if (combo > 1) {
@@ -299,12 +290,9 @@ function drawHud(t, now) {
     hx.textAlign = 'right'; txt(Math.round(score), W - 24, 52, 36, '#fff', '#c66ad0');
     if (t < 0) { hx.textAlign = 'center'; txt(NAMES[sel] || 'ENCORE', W / 2, H * 0.24, Math.min(W / 20, 60), css(hsv(TRACK_H[Math.min(sel, 6)], 0.65, 1)), '#34104d'); txt(`${target} TO CLEAR`, W / 2, H * 0.34, 32, '#fff', '#34104d'); }
   } else if (state === 5) {
-    rb('RHYTHM RAINBOW', H * 0.24, Math.min(W / 9, 90));
-    txt('you danced the whole rainbow', W / 2, H * 0.44, 28, '#fff', '#7040a0');
-    txt('by Alex Wolfe · js13k 2026', W / 2, H * 0.53, 24, '#fff', '#7040a0');
-    txt('thanks for playing', W / 2, H * 0.66, 34, '#ffd45c', '#ff7ad9');
-    hx.globalAlpha = 0.6 + 0.4 * Math.sin(now * 3);
-    txt('press any key', W / 2, H * 0.82, 26, '#fff', '#fff');
+    txt('THANKS FOR PLAYING', W / 2, H * 0.3, 44, '#fff', '#34104d');
+    txt('by Alex Wolfe · js13k 2026', W / 2, H * 0.5, 24, '#fff', '#34104d');
+    txt('Press Enter', W / 2, H * 0.7, 24, '#fff', '#34104d');
   } else {
     if (won === 2) { txt('YOU UNLOCKED', W / 2, H * 0.15, 40, '#fff', '#c66ad0'); rb('THE RAINBOW', H * 0.15 + 64, 64); }
     else txt(`STAGE ${passed ? 'COMPLETE' : 'FAILED'}`, W / 2, H * 0.24, Math.min(W / 18, 60), '#ffe9ff', '#34104d');
@@ -387,21 +375,14 @@ bmInit(cv, [0, 0, 0, 1]).then(() => {
     // One landing per milestone; stronger jumps and a full eased turn from 20 onward.
     const celebration = state === 1 ? clamp((t - Math.max(milestoneT, danceT)) / 1.1, 0, 1) : 1;
     const jump = Math.sin(celebration * Math.PI) * (powered() ? 2 : Math.min(milestone, 3)) * 0.32;
-    const spin = powered() || milestone > 1 ? celebration * celebration * (3 - 2 * celebration) * 6.283185 * (powered() ? 1 : Math.min(milestone - 1, 2)) : 0;
+    const spin = powered() || milestone > 1 ? celebration * celebration * (3 - 2 * celebration) * 6.283185 : 0;
     const ph = beats % 1, bounce = Math.sin(ph * Math.PI);
     curLX += (leanX - curLX) * (dt * 14); leanX *= Math.pow(0.02, dt);
     curLY += (leanY - curLY) * (dt * 14); leanY *= Math.pow(0.02, dt);
     curHop += (hop - curHop) * (dt * 16); hop *= Math.pow(0.005, dt);
-    const sq = 1 - bounce, S = UNI[3] * (state ? 1 : 1.1), party = (won === 2 && state === 2) || state === 5;
+    const sq = 1 - bounce, S = UNI[3] * (state ? 1 : 1.1);
     let M;
-    if (party) {
-      // ending: front and centre on the track, facing the camera, dancing side to side to the beat
-      const sw = Math.sin(beats * Math.PI);
-      M = bmTrans(sw * 0.5, 0.06 + bounce * 0.08, -3.6);
-      M = bmMul(M, bmRotY(sw * 0.14));
-      M = bmMul(M, bmRotZ(sw * -0.12));
-      M = bmMul(M, bmScale(-S * 1.15, S * 1.15, S * 1.15));
-    } else {
+    {
       // side view: bottom-left during play and menus; centre stage on the title
       M = bmTrans((playing ? UNI[0] : 0) + curLX * 0.2, UNI[1] + jump + bounce * 0.08 + curHop * 0.25 - (state === 4 ? 0.25 : 0), state ? UNI[2] : -3.4);
       M = bmMul(M, bmRotX(curLX * 0.28));
@@ -439,9 +420,6 @@ bmInit(cv, [0, 0, 0, 1]).then(() => {
       while (j < chart.length && -(chart[j].t - t) * SCROLL >= FAR) j++;
       for (let i = j - 1; i >= nextNote; i--) if (!chart[i].hit) tile(chart[i], -(chart[i].t - t) * SCROLL, 1);
     }
-    // Ending confetti reuses the regular hit particles.
-    if ((state === 2 || state === 5) && won && bursts.length < 12 && Math.random() < 0.15)
-      bursts.push({ t, lane: Math.random() * 4 | 0, big: 1 });
     for (let b = bursts.length - 1; b >= 0; b--) {
       const B = bursts[b], life = B.big ? 0.9 : 0.55, age = t - B.t;
       if (age > life) { bursts.splice(b, 1); continue; }

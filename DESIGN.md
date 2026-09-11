@@ -111,3 +111,14 @@ Custom sky-firework trajectories were replaced with lighter confetti using the
 existing hit-particle system. The full rainbow, dancing unicorn, completion
 message, credits and encore remain. This saves 129 compressed bytes: the ZIP
 is now 13,902 bytes, 590 bytes over the submission limit.
+
+## Applied approved package
+
+Checkpoint before cuts: 0279300. Applied the approved isolated-audit package:
+stage 7 music replaces the unique encore/intro song; compact credits retain
+Alex Wolfe attribution; no separate finale dance or confetti; solid stage-card
+fills retain their borders/glow; three tilted celebration words without shake;
+one twirl; consistent meter label; no large activation-title flash; no body
+badge or cheek blush. Breathing glow, Space prompt, keycaps, locks, power and
+core gameplay remain. Build: 13,259 bytes, 53 bytes under the limit. Tests pass.
+Approved after visual review and ready for check-in.

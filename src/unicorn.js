@@ -133,11 +133,6 @@ function buildUnicorn(Q, pal, hue = 0.9) {
 
   // ── masses
   loaf(m, HEAD, [0.54, 0.52, 0.5], E, WHITE, LAT, LON, HF); // original slightly oval head proportions
-  // Blush is painted into the head vertices, so it follows the cheek exactly.
-  for (let i = 0; i < m.pos.length; i += 3) {
-    const a = Math.max(0, 1 - Math.hypot((Math.abs(m.pos[i]) - 0.46) / 0.15, (m.pos[i + 1] - 1.23) / 0.12, (m.pos[i + 2] - 0.5) / 0.16));
-    for (let j = 0; j < 3; j++) m.col[i + j] = WHITE[j] * (1 - a) + MUZZLE[j] * a;
-  }
   loaf(m, til([0, 1.19, 0.6]), [0.29, 0.22, 0.28], 0.85, SNOUT, LAT, LON, HF);   // rounded muzzle, tilted with the head
   // Small oval nostrils lie directly on the curved muzzle surface.
   for (const sx of [-1, 1]) {
@@ -153,15 +148,6 @@ function buildUnicorn(Q, pal, hue = 0.9) {
     }
   }
   loaf(m, BODY, BR, E, WHITE, LAT, LON);
-  // Thin star decal, projected onto the coat surface.
-  const badge = m.pos.length / 3;
-  for (let j = 0; j < 10; j++) {
-    const a = j * Math.PI / 4, r = j ? (j % 2 ? 0.13 : 0.045) : 0;
-    const y = 0.72 + r * Math.cos(a), z = -0.4 + r * Math.sin(a);
-    const x = BR[0] * Math.pow(1 - Math.pow(Math.abs((y - BODY[1]) / BR[1]), 2 / E) - Math.pow(Math.abs((z - BODY[2]) / BR[2]), 2 / E), E / 2);
-    m.pos.push(x + 0.009, y, z); m.nrm.push(1, 0, 0); m.col.push(...HOOF);
-    if (j > 1) m.idx.push(badge, badge + j - 1, badge + j);
-  }
   for (const [x, z] of [[0.22, 0.12], [-0.22, 0.12], [0.22, -0.46], [-0.22, -0.46]]) {
     loaf(m, [x, 0.44, z], [0.17, 0.4, 0.18], 0.82, WHITE, LAT, LON);              // rounded leg, top buried in the body
     ribbon(m, spline([[x, 0, z, 0.085, 0.085], [x, 0.045, z, 0.14, 0.14], [x, 0.15, z, 0.14, 0.14]], 4), 16, HOOF, [1, 0, 0]);   // hoof: short cylinder, softly rounded bottom edge

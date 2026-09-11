@@ -82,13 +82,7 @@ const SONGS = [
 // The title-screen loop: deep minimal house in F minor, 120 BPM, drops at bar 3.
 // The secret bonus track (DANCE FOREVER), unlocked by beating all seven levels:
 // euphoric C major anthem, 128 BPM, the hardest-but-fair chart in the game.
-const BONUS =   { r: 5168, t: [
-    [1, "111110011110", ["?   ?   ?   ?   ?   ?   ?   ?   "]],
-    [4, "021210121210", ["7 7 7 7 7 7 7 7 > > > > > > > > ", "@ @ @ @ @ @ @ @ < < < < < < < < "]],
-    [5, "001212121200", ["CGJO    CGJO    BEJN    BEJN    ", "@CGL    @CGL    <@CH    <@CH    "]],
-    [6, "121212121212", ["J   O   S   O   J   N   Q   N   ", "L   O   S   O   H   L   O   L   "]],
-    [0, "000000011100", ["C G J O C G J O C G J O C G J O "]],
-  ], s: ["123332344421", ["1       2       3       4       ", "1   3   2   4   1   3   2   4   ", "1234    3   1   4321    2   4   ", "5   2   1234  2 6   4   1234  2 "]] };
+const BONUS = SONGS[6];
 const INTRO = BONUS;
 
 // Expand a compact song into the shape synth() reads.
