@@ -68,12 +68,13 @@ const JUDGE = [[0.045, 'PERFECT', '#ff7ad9', 100], [0.09, 'GREAT', '#ffd45c', 70
 const songTime = () => (ac ? ac.currentTime - t0 : 0);
 
 function sound(from, to, duration, volume) {
-  const o = ac.createOscillator(), gain = ac.createGain(), at = ac.currentTime;
+  const o = ac.createOscillator(), gain = ac.createGain(), envelope = gain.gain, at = ac.currentTime + 0.01;
   o.type = 'triangle';
   o.frequency.setValueAtTime(from, at);
-  o.frequency.exponentialRampToValueAtTime(to, at + (duration === 0.12 ? 0.025 : duration * 0.6));
-  gain.gain.setValueAtTime(volume, at);
-  gain.gain.exponentialRampToValueAtTime(0.001, at + duration);
+  o.frequency.exponentialRampToValueAtTime(to, at + duration * 0.2);
+  envelope.setValueAtTime(0.000001, at);
+  envelope.exponentialRampToValueAtTime(volume, at + 0.005);
+  envelope.exponentialRampToValueAtTime(0.000001, at + duration);
   o.connect(gain); gain.connect(ac.destination); o.start(at); o.stop(at + duration);
 }
 
@@ -142,6 +143,7 @@ function play(g, loop, at) {
 function intro() {
   ac = ac || new AudioContext();
   [introSrc, bpm] = play(INTRO, 1, introT0 = ac.currentTime);
+  sound(1, 1, 1, 0.000001);
   bursts.length = 0; held.fill(0);
   state = 4;
 }
