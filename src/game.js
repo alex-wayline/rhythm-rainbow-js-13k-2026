@@ -50,7 +50,10 @@ let ac, t0, songLen, bpm = 120, songSrc;
 let sel = 0, unlocked = +localStorage.rr_u || 1, won = 0;   // rr_ prefix: js13k games share an origin
 let introSrc, introT0 = 0;
 let chart = [], nextNote = 0;
-let target, passed;
+let target, passed, energy = 0, powerEnd = -9, danceT = -9;
+const beams = [-9, -9, -9, -9];
+const powered = () => state === 1 && songTime() < powerEnd;
+const powerFill = () => powered() ? (powerEnd - songTime()) / 5 : energy / 30;
 let score = 0, combo = 0, maxCombo = 0, milestone = 0, milestoneT = -9;
 let judge = '', judgeT = -9, judgeCol = '#fff', judgeK = 0;
 const counts = [0, 0, 0, 0];         // perfect great good miss
@@ -64,15 +67,26 @@ const JUDGE = [[0.045, 'PERFECT', '#ff7ad9', 100], [0.09, 'GREAT', '#ffd45c', 70
 
 const songTime = () => (ac ? ac.currentTime - t0 : 0);
 
+function sound(from, to, duration, volume) {
+  const o = ac.createOscillator(), gain = ac.createGain(), at = ac.currentTime;
+  o.type = 'triangle';
+  o.frequency.setValueAtTime(from, at);
+  o.frequency.exponentialRampToValueAtTime(to, at + (duration === 0.12 ? 0.025 : duration * 0.6));
+  gain.gain.setValueAtTime(volume, at);
+  gain.gain.exponentialRampToValueAtTime(0.001, at + duration);
+  o.connect(gain); gain.connect(ac.destination); o.start(at); o.stop(at + duration);
+}
+
 function setJudge(k) {
   counts[k]++;
   if (k < 3) {
     combo++;
+    if (!powered()) energy = Math.min(30, energy + 1);
     if (combo % 10 === 0) { milestone = combo / 10; milestoneT = songTime(); }
     maxCombo = Math.max(maxCombo, combo);
     score += JUDGE[k][3] * (1 + Math.min(combo, 50) / 50);
     judge = JUDGE[k][1]; judgeCol = JUDGE[k][2];
-  } else { combo = 0; judge = 'MISS'; judgeCol = '#8a8a9a'; }
+  } else { if (!powered() && energy < 30) energy = 0; combo = 0; judge = 'MISS'; judgeCol = '#8a8a9a'; }
   judgeK = k; judgeT = songTime();
 }
 
@@ -92,15 +106,16 @@ function press(lane) {
     const k = dt < JUDGE[0][0] ? 0 : dt < JUDGE[1][0] ? 1 : 2;
     setJudge(k);
     flashes[lane] = t;
-    if (k < 2) for (const tone of [1, 0.4]) {
-      const o = ac.createOscillator(), gain = ac.createGain(), at = ac.currentTime;
-      o.type = 'triangle';
-      o.frequency.setValueAtTime(440 * tone, at);
-      o.frequency.exponentialRampToValueAtTime(65 * tone, at + 0.025);
-      gain.gain.setValueAtTime(k ? 0.18 : 0.28, at);
-      gain.gain.exponentialRampToValueAtTime(0.001, at + 0.12);
-      o.connect(gain); gain.connect(ac.destination); o.start(at); o.stop(at + 0.12);
+    if (powered()) {
+      beams[lane] = danceT = t;
+      for (const note of chart) if (!note.hit && note.lane === lane && note.t > t && -(note.t - t) * SCROLL >= FAR) {
+        note.hit = 1;
+        score += 100 * (1 + Math.min(combo, 50) / 50);
+      }
     }
+    if (k < 2 || powered()) for (const tone of [1, 0.4])
+      sound((powered() ? 1400 : 440) * tone, (powered() ? 90 : 65) * tone,
+        powered() ? 0.24 : 0.12, powered() ? 0.24 : k ? 0.18 : 0.28);
     if (k < 2) bursts.push({ t, lane, big: k === 0 });
     if (combo % 10 === 0) for (let i = 0; i < 4; i++) i !== lane && bursts.push({ t, lane: i, big: 1 });   // every 10th: all lanes erupt
     return;
@@ -133,7 +148,7 @@ function start() {
   [songSrc, bpm, songLen] = play(g, 0, t0 = ac.currentTime + 2.2);
   chart = makeChart(g, bpm);
   target = Math.ceil(chart.reduce((sum, n, i) => sum + 60 * (1 + Math.min(i + 1, 50) / 50), 0));
-  passed = false;
+  passed = false; energy = 0; powerEnd = danceT = -9; beams.fill(-9);
   nextNote = 0; score = 0; combo = 0; maxCombo = 0; won = 0; judge = ''; milestoneT = -9; counts.fill(0); bursts.length = 0; flashes.fill(-9);
   state = 1;
 }
@@ -152,24 +167,27 @@ function go(k) {
 addEventListener('keydown', (e) => {
   if (e.repeat) return;
   if (state === 1) {
-    if (e.code in KEYS) { held[KEYS[e.code]] = 1; press(KEYS[e.code]); }
+    if (e.code === 'Space') { e.preventDefault(); if (energy === 30 && !powered()) { powerEnd = songTime() + 5; energy = 0; danceT = songTime(); sound(220, 880, 0.45, 0.2); } }
+    else if (e.code in KEYS) { held[KEYS[e.code]] = 1; press(KEYS[e.code]); }
     else if (e.key === 'Escape') toSelect();
   } else go(e.code in KEYS ? KEYS[e.code] : e.key || e.code);   // lane keys navigate the stage row
 });
 addEventListener('keyup', (e) => { if (e.code in KEYS) held[KEYS[e.code]] = 0; });
-const stageLayout = () => [Math.min(innerWidth / 8, innerHeight / 5, 150), innerHeight * 0.32];
+const stageLayout = () => [Math.min(cv.clientWidth / 8, cv.clientHeight / 5, 150), cv.clientHeight * 0.32];
 addEventListener('pointerup', (e) => {
+  const rect = cv.getBoundingClientRect(), x = e.clientX - rect.left, y = e.clientY - rect.top;
+  if (x < 0 || y < 0 || x > rect.width || y > rect.height) return;
   if (state === 4) {
-    const [g, y] = stageLayout(), i = Math.round((e.clientX - innerWidth / 2) / g + 3);
-    if (i >= 0 && i < unlocked && Math.abs(e.clientX - innerWidth / 2 - (i - 3) * g) < g * 0.42 && Math.abs(e.clientY - y) < g * 0.42) { sel = i; start(); }
+    const [g, row] = stageLayout(), i = Math.round((x - cv.clientWidth / 2) / g + 3);
+    if (i >= 0 && i < unlocked && Math.abs(x - cv.clientWidth / 2 - (i - 3) * g) < g * 0.42 && Math.abs(y - row) < g * 0.42) { sel = i; start(); }
   } else if (state === 2) {
-    if (Math.abs(e.clientX - innerWidth / 2) < 220 && e.clientY > innerHeight * 0.7 && e.clientY < innerHeight * 0.9) go(e.clientY < innerHeight * 0.81 ? 'Enter' : 1);
+    if (Math.abs(x - cv.clientWidth / 2) < 220 && y > cv.clientHeight * 0.7 && y < cv.clientHeight * 0.9) go(y < cv.clientHeight * 0.81 ? 'Enter' : 1);
   } else if (state !== 1) go('');
 });   // pointerup: touch activation arrives on release
 
 // ── HUD (2D canvas overlay — text is far cheaper here than in a glyph atlas)
 function drawHud(t, now) {
-  const d = devicePixelRatio, W = innerWidth, H = innerHeight, w = W * d | 0, h = H * d | 0;
+  const d = devicePixelRatio, W = cv.clientWidth, H = cv.clientHeight, w = W * d | 0, h = H * d | 0;
   if (hud.width != w || hud.height != h) { hud.width = w; hud.height = h; }
   hx.setTransform(d, 0, 0, d, 0, 0);
   hx.clearRect(0, 0, W, H);
@@ -191,30 +209,13 @@ function drawHud(t, now) {
   };
   const cx = W * 0.86;   // judgments live in the open space right of the track
   if (state === 0) {
-    const big = Math.min(W / 7, 150);
-    txt('RHYTHM', W / 2, H * 0.3, big * 0.38, '#ffe9ff', '#34104d');
-    rb('RAINBOW', H * 0.3 + big * 0.86, big);
+    const big = Math.min(W / 7, H / 6, 150);
+    txt('RHYTHM', W / 2, H * 0.24, big * 0.38, '#ffe9ff', '#34104d');
+    rb('RAINBOW', H * 0.24 + big * 0.86, big);
     hx.globalAlpha = 0.6 + 0.4 * Math.sin(now * 3);
     txt('PRESS ANY KEY', W / 2, H * 0.85, 20, '#fff', '#34104d');   // under the unicorn, above the receptors; stroke = fill, so the pulse never shows an outline
   } else if (state === 4) {
     const f = Math.min(W / 35, 22);
-    // Sparse coloured glints and a quiet meteor, behind the selection controls.
-    for (let i = 0; i < 24; i++) {
-      const x = ((i * 0.618) % 1) * W, y = ((i * 0.377 + 0.07) % 1) * H;
-      hx.globalAlpha = 0.18 + 0.12 * Math.sin(now + i);
-      hx.fillStyle = css(hsv(TRACK_H[i % 7], 0.4, 1));
-      hx.fillRect(x - 3, y, 7, 1); hx.fillRect(x, y - 3, 1, 7);
-    }
-    const meteor = now % 9;
-    if (meteor < 1.4) {
-      hx.strokeStyle = '#b5dcff'; hx.lineWidth = 2;
-      for (let i = 0; i < 16; i++) {
-        const x = W * 0.65 + meteor * W * 0.18 - i * 5, y = H * 0.03 + meteor * H * 0.1 - i * 2;
-        hx.globalAlpha = Math.sin(meteor / 1.4 * Math.PI) * (1 - i / 16) * 0.5;
-        hx.beginPath(); hx.moveTo(x, y); hx.lineTo(x - 5, y - 2); hx.stroke();
-      }
-    }
-    hx.globalAlpha = 1;
     txt('SELECT A STAGE', W / 2, H * 0.14, Math.min(W / 13, H / 14, 68), '#ffe9ff', '#34104d');
     txt('Press Enter to play', W / 2, H * 0.19, f, '#bba9d2', '#34104d');
     const [g, y0] = stageLayout(), s = g * 0.84;
@@ -252,7 +253,7 @@ function drawHud(t, now) {
     });
   } else if (state === 1) {
     // Visual charge prototype: thirty consecutive hits fill the rainbow reservoir.
-    const power = Math.min(combo / 30, 1), barW = Math.min(W * 0.22, 340), barH = 22;
+    const power = powerFill(), barW = Math.min(W * 0.22, 340), barH = 22;
     const barX = W * 0.86 - barW / 2, barY = H * 0.7;
     hx.save();
     hx.shadowColor = '#7cdeff'; hx.shadowBlur = power === 1 ? 16 + Math.sin(now * 2.4) * 4 : 4;
@@ -264,15 +265,18 @@ function drawHud(t, now) {
     TRACK_H.forEach((h, i) => spectrum.addColorStop(i / 6, css(hsv(h, 0.7, 1))));
     hx.fillStyle = spectrum; hx.globalAlpha = 0.12; hx.fillRect(barX, barY, barW, barH);
     hx.globalAlpha = 1; hx.fillRect(barX, barY, barW * power, barH);
-    const gloss = hx.createLinearGradient(0, barY, 0, barY + barH);
-    gloss.addColorStop(0, '#ffffff80'); gloss.addColorStop(0.5, '#ffffff00'); gloss.addColorStop(1, '#00000030');
-    hx.fillStyle = gloss; hx.fillRect(barX, barY, barW * power, barH);
     hx.restore();
-    txt(power === 1 ? 'FULL CHARGE' : 'RAINBOW POWER', W * 0.86, barY - 16, 16, power === 1 ? '#b9f3ff' : '#cbb8df', '#130e28');
-    if (power === 1) {
+    txt(powered() ? 'RAINBOW RUSH' : power === 1 ? 'FULL CHARGE' : 'RAINBOW POWER', W * 0.86, barY - 16, 16, power === 1 ? '#b9f3ff' : '#cbb8df', '#130e28');
+    if (power === 1 && !powered()) {
       hx.globalAlpha = 0.65 + Math.sin(now * 4) * 0.35;
       txt('Press Space to activate', W * 0.86, barY + barH + 26, Math.min(16, barW / 13), '#b9f3ff', '#130e28');
       hx.globalAlpha = 1;
+    }
+    const ignition = powered() ? clamp(1 - (t - powerEnd + 5) / 0.7, 0, 1) : 0;
+    if (ignition) {
+      hx.save(); hx.globalAlpha = ignition * 0.65;
+      txt('RAINBOW RUSH', W / 2, H * 0.23, Math.min(W / 22, 52), '#b9f3ff', '#34104d');
+      hx.restore();
     }
     const cheer = clamp(1 - (t - milestoneT), 0, 1);
     if (cheer) {
@@ -327,7 +331,7 @@ bmInit(cv, [0, 0, 0, 1]).then(() => {
   let hairK = 6;   // which level's palette the hair currently wears
 
   // charm quad + instance buffers, allocated once and rewritten each frame
-  const MAXI = 320;
+  const MAXI = 512;
   const iPos = new Float32Array(MAXI * 4), iCol = new Float32Array(MAXI * 4), iScl = new Float32Array(MAXI);
   bmAttr(pCharm, 0, quad); bmIndex(pCharm, quadIx);
   bmAttr(pCharm, 1, iPos); bmAttr(pCharm, 2, iCol); bmAttr(pCharm, 3, iScl);
@@ -369,20 +373,21 @@ bmInit(cv, [0, 0, 0, 1]).then(() => {
     // ── sky + highway. The world wears the selected level's palette (the
     // full rainbow on the title). The track sits dim behind the title and menu
     // and only reaches full brightness in play.
-    const kk = state ? Math.min(sel + (state === 2 ? won : 0), 6) : 6;   // a win paints the world with the newly unlocked colour
+    const kk = powered() ? 6 : state ? Math.min(sel + (state === 2 ? won : 0), 6) : 6;   // a win paints the world with the newly unlocked colour
     if (kk !== hairK) { hairK = kk; bmAttr(pUni, 2, buildUnicorn(3, hair(kk), TRACK_H[kk]).col); }
     const beats = (state === 1 ? Math.max(t, 0) : ac ? ac.currentTime - introT0 : now) * bpm / 60;
     const bright = playing ? 1 : 0.3;
+    const rush = powered() ? clamp((t - powerEnd + 5) / 0.35, 0, 1) : 0;
     uSky.set([0, H, E, T * asp, 1, 0, 0, T, 0, c, -s, now, 0, -s, -c, state === 4 ? -2 : state ? beats : -1,
-      unlocked, kk, bright, SCROLL * 60 / bpm]);
+      unlocked + (7 - unlocked) * rush, powered() ? sel + (6 - sel) * rush : kk, bright, SCROLL * 60 / bpm]);
     bmUniforms(pSky, uSky); bmDraw(pSky);
 
     // ── unicorn: beat bounce + lane-driven lean, all one pose function. It faces
     // +x (toward the track), so lean is a roll about x and the nod a pitch about z.
     // One landing per milestone; stronger jumps and a full eased turn from 20 onward.
-    const celebration = state === 1 ? clamp((t - milestoneT) / 1.1, 0, 1) : 1;
-    const jump = Math.sin(celebration * Math.PI) * Math.min(milestone, 3) * 0.32;
-    const spin = milestone > 1 ? celebration * celebration * (3 - 2 * celebration) * 6.283185 * Math.min(milestone - 1, 2) : 0;
+    const celebration = state === 1 ? clamp((t - Math.max(milestoneT, danceT)) / 1.1, 0, 1) : 1;
+    const jump = Math.sin(celebration * Math.PI) * (powered() ? 2 : Math.min(milestone, 3)) * 0.32;
+    const spin = powered() || milestone > 1 ? celebration * celebration * (3 - 2 * celebration) * 6.283185 * (powered() ? 1 : Math.min(milestone - 1, 2)) : 0;
     const ph = beats % 1, bounce = Math.sin(ph * Math.PI);
     curLX += (leanX - curLX) * (dt * 14); leanX *= Math.pow(0.02, dt);
     curLY += (leanY - curLY) * (dt * 14); leanY *= Math.pow(0.02, dt);
@@ -404,7 +409,7 @@ bmInit(cv, [0, 0, 0, 1]).then(() => {
       M = bmMul(M, bmRotY(spin + 1.5708 + curLX * 0.2 - (playing ? 0 : 0.65)));   // title: turned toward the camera for a 3/4 view
       M = bmMul(M, bmScale(-S * (1 + sq * 0.04), S * (1 - sq * 0.08), S * (1 + sq * 0.04)));
     }
-    const charge = state === 1 ? Math.min(combo / 30, 1) : 0;
+    const charge = state === 1 ? powerFill() : 0;
     const breath = 0.8 + Math.sin(now * 2.4) * 0.2;
     uLit.set([...VP, ...M, 0.4, 1, 0.6, charge * breath, ...hsv(TRACK_H[kk], 0.55, 0.42)]);   // vp, model, light dir (padded), fog colour
     bmUniforms(pUni, uLit); bmDraw(pUni);
@@ -412,7 +417,7 @@ bmInit(cv, [0, 0, 0, 1]).then(() => {
     // ── charms: receptors, notes (far to near, for blending), particles
     ni = 0;
     // Charge aura stays on the ground while the unicorn jumps; a miss clears combo.
-    if (state === 1 && combo) {
+    if (state === 1 && charge) {
       for (let i = 0; i < 48; i++) {
         const angle = i / 48 * 6.283185;
         inst(UNI[0] + Math.cos(angle) * (0.81 + breath * 0.06), UNI[1] - 0.08,
@@ -421,6 +426,8 @@ bmInit(cv, [0, 0, 0, 1]).then(() => {
       }
     }
     for (let i = 0; i < LANES; i++) {
+      const beam = state === 1 ? clamp(1 - (t - beams[i]) / 0.4, 0, 1) : 0;
+      if (beam) for (let j = 0; j < 64; j++) inst(laneX(i), 0.06, -j * 0.5, 4, [0.6, 0.9, 1], beam, 0.4);
       const flash = clamp(1 - (t - flashes[i]) / 0.22, 0, 1);
       if (flash) {
         inst(laneX(i), 0.3 + (1 - flash) * 0.7, 0, 4, [1, 0.8, 0.3], flash, flash * 0.6);
@@ -457,7 +464,7 @@ bmInit(cv, [0, 0, 0, 1]).then(() => {
     drawHud(t, now);
   });
 }, () => {
-  hud.width = innerWidth; hud.height = innerHeight;
+  hud.width = cv.clientWidth; hud.height = cv.clientHeight;
   hx.font = '900 28px system-ui'; hx.textAlign = 'center'; hx.fillStyle = '#fff';
-  hx.fillText('THIS GAME NEEDS A WEBGPU BROWSER', innerWidth / 2, innerHeight / 2);
+  hx.fillText('THIS GAME NEEDS A WEBGPU BROWSER', cv.clientWidth / 2, cv.clientHeight / 2);
 });

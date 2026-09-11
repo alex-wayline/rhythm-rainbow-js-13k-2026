@@ -19,7 +19,7 @@ const device = {
   },
   createBindGroupLayout: () => ({}),
   createPipelineLayout: () => ({}),
-  createRenderPipeline: (d) => { if (!d.vertex.buffers.every((b) => /^float32(x[234])?$/.test(b.attributes[0].format))) errors.push('bad vertex format'); return {}; },
+  createRenderPipeline: (d) => { if (!d.vertex.buffers.every((b) => /^float32(x[234])?$/.test(b.attributes[0].format))) errors.push('bad vertex format'); return {getBindGroupLayout: () => ({})}; },
   createBindGroup: () => ({}),
   createBuffer: ({ size, usage }) => { const b = { id: bufferId++, size, usage }; buffers.set(b.id, b); return b; },
   createTexture: () => ({ createView: () => ({}), destroy: noop }),
@@ -48,6 +48,7 @@ const voices = [];
 const effects = [];
 const ctx2d = proxy('ctx2d');
 const canvas = (id) => ({ id, clientWidth: 1280, clientHeight: 720, width: 0, height: 0,
+  getBoundingClientRect: () => ({left: (sandbox.innerWidth - 1280) / 2, top: (sandbox.innerHeight - 720) / 2, width: 1280, height: 720}),
   getContext: (k) => (k === 'webgpu' ? { configure: noop, getCurrentTexture: () => ({ createView: () => ({}) }) } : ctx2d) });
 
 const sandbox = {
@@ -77,7 +78,7 @@ const g = (name) => vm.runInContext(name, sandbox);
 
 const lanes = ['ArrowLeft', 'ArrowDown', 'ArrowUp', 'ArrowRight'];
 const frame = (dtMs) => { stats.frames++; audioTime += dtMs / 1000; const fs = raf; raf = []; fs.forEach((f) => f(stats.frames * dtMs)); };
-const key = (code, type = 'keydown') => (listeners[type] || []).forEach((f) => f({ code, repeat: false }));
+const key = (code, type = 'keydown') => (listeners[type] || []).forEach((f) => f({ code, key: code, preventDefault: noop, repeat: false }));
 
 // gate → attract → select → play
 for (let i = 0; i < 5; i++) frame(16);
@@ -88,6 +89,11 @@ if (!MIN) {
     layout.forEach((code, lane) => check(g('KEYS')[code] === lane, `wrong lane: ${code}`));
   const pointer = (x, y) => listeners.pointerup.forEach(f => f({clientX:x, clientY:y}));
   pointer(640, 10); check(g('state') === 4, 'background click started game');
+  sandbox.innerHeight = 900;
+  pointer(640, 20); check(g('state') === 4, 'letterbox click started game');
+  pointer(640 - 3 * g('stageLayout()[0]'), g('stageLayout()[1]') + 90);
+  check(g('state') === 1 && g('sel') === 0, 'letterboxed stage click missed');
+  key('Escape'); sandbox.innerHeight = 720;
   const [gap, y] = g('stageLayout()');
   pointer(640 - 2 * gap, y); check(g('state') === 4, 'locked stage started');
   vm.runInContext('unlocked = 7', sandbox);
@@ -124,6 +130,36 @@ if (!MIN) {
     check(voices.length === before && effects.length === effectsBefore, 'unexpected combo celebration sound');
     if (comboBefore !== 8) check(g('milestoneT') === g('songTime()'), 'visual combo celebration missing');
   }
+  vm.runInContext('sel = 0; start(); energy = 29', sandbox);
+  key('Space'); check(!g('powered()'), 'undercharged power activated');
+  vm.runInContext('setJudge(3)', sandbox);
+  check(g('energy') === 0, 'miss did not reset partial charge');
+  vm.runInContext('energy = 30; setJudge(3); setJudge(3)', sandbox);
+  check(g('energy') === 30, 'miss erased stored full charge');
+  audioTime = g('t0 + chart[0].t');
+  key('Space');
+  const end = g('powerEnd');
+  check(g('powered()') && g('energy') === 0, 'activation did not consume charge');
+  const lane = g('chart[0].lane');
+  const visibleEnd = g('songTime() - FAR / SCROLL');
+  const collected = g('chart').filter(n => n.lane === lane && n.t <= visibleEnd).length;
+  vm.runInContext(`press(${lane})`, sandbox);
+  check(g('chart').filter(n => n.lane === lane && n.t <= visibleEnd).every(n => n.hit), 'beam missed visible lane notes');
+  check(g('chart').filter(n => n.lane === lane && n.t > visibleEnd).every(n => !n.hit), 'beam collected offscreen notes');
+  check(Math.abs(g('score') - collected * 102) < 0.001, 'beam score incorrect');
+  check(g('combo') === 1 && g('energy') === 0, 'collected notes charged power or combo');
+  const beamScore = g('score');
+  vm.runInContext(`press(${lane})`, sandbox);
+  check(g('score') === beamScore, 'beam scored twice');
+  audioTime += 2.5;
+  check(Math.abs(g('powerFill()') - 0.5) < 0.001, 'meter did not drain');
+  key('Space'); check(g('powerEnd') === end, 'activation extended power');
+  vm.runInContext('setJudge(3)', sandbox);
+  check(g('powered()'), 'miss stopped active drain');
+  audioTime = end + g('t0') + 0.001;
+  check(!g('powered()') && g('powerFill()') === 0, 'power failed to expire');
+  vm.runInContext('setJudge(0)', sandbox);
+  check(g('energy') === 1, 'charge did not resume after expiration');
   vm.runInContext('toSelect(); sel = 0; unlocked = 1', sandbox);
 }
 key('Space'); key('Enter');

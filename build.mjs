@@ -70,6 +70,15 @@ runtime = patch(runtime, `        const entries = prog.ub
 runtime = patch(runtime, `format: opts.fmt ? TEX_HDR : bmFormat,`, `format: bmFormat,`, 'fmt');
 runtime = patch(runtime, `        primitive: { topology: 'triangle-list', cullMode: opts.cull ? 'back' : 'none' },\n`, ``, 'cull');
 
+// All three render pipelines use shader-inferred uniform layouts. No textures
+// or storage buffers are bound, so the explicit generic layout path is unused.
+runtime = patch(runtime, "    const bindLayout = bmLayout(VIS_RENDER, opts.u || 0, opts.t || [], opts.s || []);", "", 'render-layout');
+const renderStart = runtime.indexOf('function bmProgram('), renderEnd = runtime.indexOf('function bmCompute(');
+let render = runtime.slice(renderStart, renderEnd);
+render = patch(render, "layout: bmDevice.createPipelineLayout({ bindGroupLayouts: [bindLayout] }),", "layout: 'auto',", 'automatic-render-layout');
+render = patch(render, "return bmShell(pipeline, bindLayout, opts);", "return bmShell(pipeline, pipeline.getBindGroupLayout(0), opts);", 'inferred-render-bindings');
+runtime = runtime.slice(0, renderStart) + render + runtime.slice(renderEnd);
+
 // ── WGSL: brometal renames shader locals but deliberately keeps whitespace,
 // the generated bm_* names, member names and 1.0-style literals, and terser
 // cannot see inside the strings. Compact all of that (about 430 zipped bytes).

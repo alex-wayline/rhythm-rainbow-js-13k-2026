@@ -69,3 +69,38 @@ The prompt is visual only for now; activation is not implemented.
 
 References: Guitar Hero Star Power meter and Street Fighter 6 Drive Gauge.
 Current packed prototype: 14,002 bytes (690 bytes above submission limit).
+
+## Rainbow Rush — implemented prototype
+
+Thirty manually timed hits without a miss charge the meter. Space spends a full
+charge for five seconds of rainbow scenery. The meter drains continuously; hits
+and misses cannot refill or extend the active window. After expiry, charging
+restarts from zero. Every successful powered hit triggers a unicorn jump/twirl
+and collects only currently visible future notes in that lane, awarding 100 points per collected
+note with the current combo multiplier. Collected notes do not increase combo
+or charge, and cannot score twice or become misses.
+
+This supersedes the earlier undecided lane-laser proposal. Size optimization
+is still required before submission.
+
+### Stored full charge
+
+Once the meter reaches full charge, misses do not remove it. It stays ready
+until activated or the stage ends. A miss still resets partial charge. Starting
+a stage resets charge; active power still drains for five seconds.
+
+### Power feedback refinement
+
+Activation has a rising sound, expanding blue light ring, brief Rainbow Rush
+text, and a 0.35-second transition into rainbow scenery. Powered hits use a
+longer laser pitch sweep. Lane collection is limited to the visible track
+(up to four seconds ahead at the current scroll speed); offscreen notes remain.
+
+See SIZE-PLAN.md for measured optional cuts and a preservation-first size plan.
+
+## Approved size cuts
+
+Stage 8 encore music now plays during the intro/menu. Extra menu coloured stars
+and shooting star, activation expanding ring, and meter gloss have been removed.
+The original starfield, rainbow gradient, activation sound/text, and all eight
+stage songs remain. Packed size: 14,051 bytes; 739 bytes remain to save.

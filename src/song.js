@@ -89,16 +89,7 @@ const BONUS =   { r: 5168, t: [
     [6, "121212121212", ["J   O   S   O   J   N   Q   N   ", "L   O   S   O   H   L   O   L   "]],
     [0, "000000011100", ["C G J O C G J O C G J O C G J O "]],
   ], s: ["123332344421", ["1       2       3       4       ", "1   3   2   4   1   3   2   4   ", "1234    3   1   4321    2   4   ", "5   2   1234  2 6   4   1234  2 "]] };
-const INTRO =   { r: 5513, t: [
-    [1, "11111111110", ["?   ?   ?   ?   ?   ?   ?   ?   "]],
-    [2, "11111111112", [" C C C C C C C C C C C C C C C C", "  C   C   C   C  C C C CCCCCCCCC"]],
-    [3, "11111111110", ["  O   O   O   O   O   O   O   O "]],
-    [7, "01111111110", ["    C       C       C       C   "]],
-    [4, "12121212120", ["<  <  H <  <  H 8  8  D 8  D  87", "7  7  C 7  7  C :  :  F : F: :F:"]],
-    [5, "02121434340", ["  K        K      K        K    ", "  J        J      J        J    ", "  K   K    K      K   K    K    ", "  J   J    J      J   J    J    "]],
-    [5, "02121434340", ["  F        F      H        H    ", "  F        F      D        D    ", "  F   F    F      H   H    H    ", "  F   F    F      D   D    D    "]],
-    [6, "00102010200", ["            R O             O K ", "            K O             O R "]],
-  ], s: ["12323442445", ["1       2       3       4       ", "1   2   3   4   4   3   2   1   ", "1 2     3  4    4 3     2  1    ", "1 2   3    4    4 3   2    1    ", "  1   2   3   4         1 2 3 4 "]] };
+const INTRO = BONUS;
 
 // Expand a compact song into the shape synth() reads.
 const notes = (s) => [...s].map((c) => (c === " " ? 0 : c.charCodeAt(0) + 80));
