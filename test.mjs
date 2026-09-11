@@ -101,12 +101,18 @@ if (!MIN) {
   key('ArrowLeft'); check(g('sel') === 0, 'left navigation failed');
   vm.runInContext('flashes.fill(1000)', sandbox);
   pointer(640 - 2 * gap, y); check(g('flashes.every(t => t === -9)'), 'previous song hit flashes leaked into new song'); check(g('state') === 1 && g('sel') === 1, 'stage click did not start selected song');
-  vm.runInContext('state = 2; sel = 0; unlocked = 2; won = 1; passed = true', sandbox);
+  vm.runInContext('t0 = ac.currentTime - songLen - 3; state = 2; sel = 0; unlocked = 2; won = 1; passed = true', sandbox);
   key('Enter'); check(g('state') === 1 && g('sel') === 1, 'Enter failed to advance');
-  vm.runInContext('state = 2', sandbox); key('ArrowDown'); check(g('state') === 4, 'Down failed to open selection');
-  vm.runInContext('state = 2; sel = 0; passed = true', sandbox); pointer(640, 720 * 0.77);
+  vm.runInContext('t0 = ac.currentTime - songLen - 3; state = 2', sandbox); key('Escape'); check(g('state') === 4, 'Escape failed to open selection');
+  vm.runInContext('t0 = ac.currentTime - songLen - 3; state = 2; sel = 0; passed = true', sandbox); pointer(640, 720 * 0.77);
   check(g('state') === 1 && g('sel') === 1, 'Next click failed');
-  vm.runInContext('state = 2; sel = 0; unlocked = 1; won = 0; passed = false', sandbox);
+  vm.runInContext('state = 2; sel = 0; passed = true; t0 = ac.currentTime - songLen - 1.6', sandbox);
+  key('ArrowDown'); check(g('state') === 2, 'results guard failed');
+  audioTime += 0.5; key('ArrowDown');
+  check(g('state') === 1 && g('sel') === 1, 'Down should continue instead of selecting');
+  vm.runInContext('state = 2; t0 = ac.currentTime - songLen - 3', sandbox);
+  pointer(640, 720 * 0.86); check(g('state') === 4, 'Stage Select click failed');
+  vm.runInContext('t0 = ac.currentTime - songLen - 3; state = 2; sel = 0; unlocked = 1; won = 0; passed = false', sandbox);
   key('Enter'); check(g('state') === 1 && g('sel') === 0, 'retry opened locked stage');
   for (const delta of [-1, 0]) {
     vm.runInContext('sel = 0; unlocked = 1; start()', sandbox);
@@ -117,9 +123,9 @@ if (!MIN) {
     check(g('passed') === (delta === 0), 'clear threshold boundary failed');
     check(g('unlocked') === (delta === 0 ? 2 : 1), 'unlock threshold failed');
   }
-  vm.runInContext('state = 2; passed = false; sel = 0; unlocked = 7; won = 0', sandbox);
+  vm.runInContext('t0 = ac.currentTime - songLen - 3; state = 2; passed = false; sel = 0; unlocked = 7; won = 0', sandbox);
   key('Enter'); check(g('sel') === 0, 'failed replay advanced to next stage');
-  vm.runInContext('state = 2; passed = false; sel = 7; won = 0', sandbox);
+  vm.runInContext('t0 = ac.currentTime - songLen - 3; state = 2; passed = false; sel = 7; won = 0', sandbox);
   key('Enter'); check(g('sel') === 7, 'failed encore did not retry encore');
   for (const comboBefore of [8, 9, 19, 29]) {
     vm.runInContext('sel = 0; start()', sandbox);
@@ -130,6 +136,13 @@ if (!MIN) {
     check(voices.length === before && effects.length === effectsBefore, 'unexpected combo celebration sound');
     if (comboBefore !== 8) check(g('milestoneT') === g('songTime()'), 'visual combo celebration missing');
   }
+  vm.runInContext('sel = 0; start(); combo = 5; energy = 5', sandbox);
+  audioTime = g('t0 - 0.5'); key('KeyA');
+  check(g('combo') === 5, 'countdown press penalized');
+  audioTime = g('t0 + chart[0].t');
+  const wrongLane = (g('chart[0].lane') + 1) % 4;
+  key(['KeyA', 'KeyS', 'KeyD', 'KeyF'][wrongLane]);
+  check(g('combo') === 0 && g('energy') === 0 && g('judge') === 'MISS', 'empty press did not break combo');
   vm.runInContext('sel = 0; start(); energy = 29', sandbox);
   key('Space'); check(!g('powered()'), 'undercharged power activated');
   vm.runInContext('setJudge(3)', sandbox);
@@ -146,20 +159,29 @@ if (!MIN) {
   vm.runInContext(`press(${lane})`, sandbox);
   check(g('chart').filter(n => n.lane === lane && n.t <= visibleEnd).every(n => n.hit), 'beam missed visible lane notes');
   check(g('chart').filter(n => n.lane === lane && n.t > visibleEnd).every(n => !n.hit), 'beam collected offscreen notes');
-  check(Math.abs(g('score') - collected * 102) < 0.001, 'beam score incorrect');
-  check(g('combo') === 1 && g('energy') === 0, 'collected notes charged power or combo');
+  check(Math.abs(g('score') - (100 * collected + collected * (collected + 1))) < 0.001, 'beam score incorrect');
+  check(g('combo') === collected && g('maxCombo') === collected && g('energy') === 0, 'beam did not build combo without charging power');
   const beamScore = g('score');
   vm.runInContext(`press(${lane})`, sandbox);
-  check(g('score') === beamScore, 'beam scored twice');
-  audioTime += 2.5;
+  check(g('score') === beamScore && g('combo') === collected, 'empty beam awarded score or combo');
+  audioTime += 0.2;
+  vm.runInContext(`chart.push({t: songTime() + 3, lane: ${lane}, hit: 0}); press(${lane})`, sandbox);
+  check(g('chart[chart.length - 1].hit') === 1 && g('score') > beamScore, 'repeat beam did not collect new visible note');
+  check(g(`beams[${lane}]`) === g('songTime()') && g('combo') === collected + 1, 'repeat beam failed to build combo');
+  audioTime += 2.3;
   check(Math.abs(g('powerFill()') - 0.5) < 0.001, 'meter did not drain');
   key('Space'); check(g('powerEnd') === end, 'activation extended power');
   vm.runInContext('setJudge(3)', sandbox);
-  check(g('powered()'), 'miss stopped active drain');
+  check(g('powered()') && g('combo') === collected + 1 && g('energy') === 0, 'powered miss broke combo or charged meter');
   audioTime = end + g('t0') + 0.001;
   check(!g('powered()') && g('powerFill()') === 0, 'power failed to expire');
+  check(g('combo') === collected + 1, 'expiration erased combo');
   vm.runInContext('setJudge(0)', sandbox);
-  check(g('energy') === 1, 'charge did not resume after expiration');
+  check(g('energy') === 1 && g('combo') === collected + 2, 'fresh charge did not preserve combo');
+  vm.runInContext('for (let i = 0; i < 28; i++) setJudge(0)', sandbox);
+  key('Space'); check(!g('powered()') && g('energy') === 29, 'recharged before 30 new hits');
+  vm.runInContext('setJudge(0)', sandbox);
+  key('Space'); check(g('powered()') && g('energy') === 0, '30 fresh hits did not recharge');
   vm.runInContext('toSelect(); sel = 0; unlocked = 1', sandbox);
 }
 key('Space'); key('Enter');

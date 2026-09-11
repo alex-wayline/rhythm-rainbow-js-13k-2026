@@ -78,6 +78,7 @@ function sound(from, to, duration, volume) {
 }
 
 function setJudge(k) {
+  if (k === 3 && powered()) return;
   counts[k]++;
   if (k < 3) {
     combo++;
@@ -91,7 +92,9 @@ function setJudge(k) {
 }
 
 function press(lane) {
-  const t = songTime();
+  const t = songTime(), power = powered();
+  if (t < 0 || t > songLen) return;
+  let k = 3;
   // pose: the lane vector drives the dance
   leanX = lane === 0 ? -1 : lane === 3 ? 1 : leanX * 0.3;
   leanY = lane === 2 ? 1 : lane === 1 ? -1 : leanY * 0.3;
@@ -103,23 +106,25 @@ function press(lane) {
     const dt = Math.abs(n.t - t);
     if (dt > 0.16) continue;
     n.hit = 1;
-    const k = dt < JUDGE[0][0] ? 0 : dt < JUDGE[1][0] ? 1 : 2;
-    setJudge(k);
-    flashes[lane] = t;
-    if (powered()) {
-      beams[lane] = danceT = t;
-      for (const note of chart) if (!note.hit && note.lane === lane && note.t > t && -(note.t - t) * SCROLL >= FAR) {
-        note.hit = 1;
-        score += 100 * (1 + Math.min(combo, 50) / 50);
-      }
-    }
-    if (k < 2 || powered()) for (const tone of [1, 0.4])
-      sound((powered() ? 1400 : 440) * tone, (powered() ? 90 : 65) * tone,
-        powered() ? 0.24 : 0.12, powered() ? 0.24 : k ? 0.18 : 0.28);
-    if (k < 2) bursts.push({ t, lane, big: k === 0 });
-    if (combo % 10 === 0) for (let i = 0; i < 4; i++) i !== lane && bursts.push({ t, lane: i, big: 1 });   // every 10th: all lanes erupt
-    return;
+    k = dt < JUDGE[0][0] ? 0 : dt < JUDGE[1][0] ? 1 : 2;
+    break;
   }
+  if (k < 3 || !power) setJudge(k);
+  if (k === 3 && !power) return;
+  flashes[lane] = t;
+  if (power) {
+    beams[lane] = danceT = t;
+    for (const note of chart) if (!note.hit && note.lane === lane && note.t >= t && -(note.t - t) * SCROLL >= FAR) {
+      note.hit = 1;
+      setJudge(0);
+    }
+  }
+  if (k < 2 || power) for (const tone of [1, 0.4])
+    sound((power ? 1400 : 440) * tone, (power ? 90 : 65) * tone,
+      power ? 0.24 : 0.12, power ? 0.24 : k ? 0.18 : 0.28);
+  if (k < 2) bursts.push({ t, lane, big: k === 0 });
+  if (k < 3 && combo % 10 === 0) for (let i = 0; i < 4; i++) i !== lane && bursts.push({ t, lane: i, big: 1 });
+
 }
 
 // ── audio: each song is synthesized once and kept as an AudioBuffer
@@ -159,8 +164,9 @@ function go(k) {
     if (typeof k === 'number') sel = clamp(sel + (k < 2 ? -1 : 1), 0, unlocked - 1);
     else if (k === 'Enter' || k === ' ' || k === '') start();
   } else if (state === 2) {
-    if (k === 'Escape' || k === 1) toSelect();
-    else if (k === 'Enter' || k === '') { sel = won === 2 ? TRACKS : sel + (passed && sel + 1 < unlocked); start(); }
+    if (songTime() < songLen + 2) return;
+    if (k === 'Escape') toSelect();
+    else { sel = won === 2 ? TRACKS : sel + (passed && sel + 1 < unlocked); start(); }
   } else if (state === 5) toSelect();
 }
 
@@ -181,7 +187,7 @@ addEventListener('pointerup', (e) => {
     const [g, row] = stageLayout(), i = Math.round((x - cv.clientWidth / 2) / g + 3);
     if (i >= 0 && i < unlocked && Math.abs(x - cv.clientWidth / 2 - (i - 3) * g) < g * 0.42 && Math.abs(y - row) < g * 0.42) { sel = i; start(); }
   } else if (state === 2) {
-    if (Math.abs(x - cv.clientWidth / 2) < 220 && y > cv.clientHeight * 0.7 && y < cv.clientHeight * 0.9) go(y < cv.clientHeight * 0.81 ? 'Enter' : 1);
+    if (Math.abs(x - cv.clientWidth / 2) < 220 && y > cv.clientHeight * 0.7 && y < cv.clientHeight * 0.9) go(y < cv.clientHeight * 0.81 ? 'Enter' : 'Escape');
   } else if (state !== 1) go('');
 });   // pointerup: touch activation arrives on release
 
@@ -298,8 +304,8 @@ function drawHud(t, now) {
     else txt(`STAGE ${passed ? 'COMPLETE' : 'FAILED'}`, W / 2, H * 0.24, Math.min(W / 18, 60), '#ffe9ff', '#34104d');
     txt(`SCORE ${Math.round(score)} / ${target} TO CLEAR`, W / 2, H * 0.24 + 70, 40, '#fff', '#c66ad0');
     txt(`MAX COMBO  ${maxCombo}`, W / 2, H * 0.24 + 120, 32, '#fff', '#c66ad0');
-    txt(won === 2 ? 'ENTER · ENCORE' : passed && sel + 1 < unlocked ? 'ENTER · NEXT STAGE' : 'ENTER · TRY AGAIN', W / 2, H * 0.77, 30, '#fff', '#34104d');
-    txt('↓ · STAGE SELECT', W / 2, H * 0.87, 24, '#bba9d2', '#34104d');
+    txt(won === 2 ? 'ANY KEY · ENCORE' : passed && sel + 1 < unlocked ? 'ANY KEY · NEXT STAGE' : 'ANY KEY · TRY AGAIN', W / 2, H * 0.77, 30, '#fff', '#34104d');
+    txt('ESC · STAGE SELECT', W / 2, H * 0.87, 24, '#bba9d2', '#34104d');
   }
   hx.globalAlpha = 1;
 }
@@ -384,7 +390,7 @@ bmInit(cv, [0, 0, 0, 1]).then(() => {
     let M;
     {
       // side view: bottom-left during play and menus; centre stage on the title
-      M = bmTrans((playing ? UNI[0] : 0) + curLX * 0.2, UNI[1] + jump + bounce * 0.08 + curHop * 0.25 - (state === 4 ? 0.25 : 0), state ? UNI[2] : -3.4);
+      M = bmTrans((playing ? UNI[0] : 0) + curLX * 0.2, UNI[1] + jump + bounce * 0.08 + curHop * 0.25 - (state === 4 ? 0.4 : 0), state ? UNI[2] : -3.4);
       M = bmMul(M, bmRotX(curLX * 0.28));
       M = bmMul(M, bmRotZ(curLY * 0.22));
       M = bmMul(M, bmRotY(spin + 1.5708 + curLX * 0.2 - (playing ? 0 : 0.65)));   // title: turned toward the camera for a 3/4 view
